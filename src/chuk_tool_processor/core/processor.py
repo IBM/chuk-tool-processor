@@ -500,9 +500,10 @@ class ToolProcessor:
 
             # Execute tool calls
             async with log_context_span("tool_execution", {"num_calls": len(calls)}):
-                # Assert that initialization completed successfully
-                assert self.registry is not None, "Registry must be initialized"
-                assert self.executor is not None, "Executor must be initialized"
+                if self.registry is None:
+                    raise RuntimeError("Registry not initialized. Call initialize() first.")
+                if self.executor is None:
+                    raise RuntimeError("Executor not initialized. Call initialize() first.")
 
                 # Check if any tools are unknown - search across all namespaces
                 unknown_tools = []
@@ -518,7 +519,8 @@ class ToolProcessor:
 
                 # Execute tools (with context scope if provided)
                 async def _execute_with_context() -> list[ToolResult]:
-                    assert self.executor is not None
+                    if self.executor is None:
+                        raise RuntimeError("Executor not initialized. Call initialize() first.")
                     # If return_order is specified and strategy supports it, call run() directly
                     # This bypasses the wrapper chain but preserves return_order semantics
                     if return_order is not None and self.strategy is not None and hasattr(self.strategy, "run"):
@@ -645,7 +647,7 @@ class ToolProcessor:
         results = await self.executor.execute(
             calls=calls,
             timeout=timeout,
-            use_cache=use_cache if hasattr(self.executor, "use_cache") else True,
+            use_cache=use_cache,
         )
 
         # Ensure we always return a list (never None)

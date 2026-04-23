@@ -36,10 +36,9 @@ classifiers = [
 ]
 dependencies = [
     "chuk-mcp>=0.9",
-    "dotenv>=0.9.9",
+    "python-dotenv>=1.0.0",
     "psutil>=7.0.0",
     "pydantic>=2.11.3",
-    "uuid>=1.30",
 ]
 
 # Optional dependency groups

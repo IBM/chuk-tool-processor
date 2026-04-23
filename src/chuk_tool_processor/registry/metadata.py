@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class MCPToolFactoryParams(BaseModel):
@@ -108,12 +108,6 @@ class ToolMetadata(BaseModel):
     mcp_factory_params: MCPToolFactoryParams | None = Field(
         None, description="Factory parameters for creating deferred MCP tools"
     )
-
-    @model_validator(mode="after")
-    def ensure_async(self) -> ToolMetadata:
-        """Ensure all tools are marked as async in the async-native architecture."""
-        self.is_async = True
-        return self
 
     def with_updated_timestamp(self) -> ToolMetadata:
         """Create a copy with updated timestamp."""

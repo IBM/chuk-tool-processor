@@ -187,7 +187,7 @@ async def update_mcp_tools_stream_manager(
     try:
         # List all tools in the namespace
         all_tools = await registry.list_tools()
-        namespace_tools = [name for ns, name in all_tools if ns == namespace]
+        namespace_tools = [tool_info.name for tool_info in all_tools if tool_info.namespace == namespace]
 
         for tool_name in namespace_tools:
             try:

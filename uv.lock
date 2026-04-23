@@ -172,10 +172,9 @@ version = "0.22.1"
 source = { editable = "." }
 dependencies = [
     { name = "chuk-mcp" },
-    { name = "dotenv" },
     { name = "psutil" },
     { name = "pydantic" },
-    { name = "uuid" },
+    { name = "python-dotenv" },
 ]
 
 [package.optional-dependencies]
@@ -221,15 +220,14 @@ observability = [
 [package.metadata]
 requires-dist = [
     { name = "chuk-mcp", specifier = ">=0.9" },
-    { name = "dotenv", specifier = ">=0.9.9" },
     { name = "orjson", marker = "extra == 'all'", specifier = ">=3.10.0,<4" },
     { name = "orjson", marker = "extra == 'fast-json'", specifier = ">=3.10.0,<4" },
     { name = "orjson", marker = "extra == 'full'", specifier = ">=3.10.0,<4" },
     { name = "psutil", specifier = ">=7.0.0" },
     { name = "pydantic", specifier = ">=2.11.3" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "redis", extras = ["hiredis"], marker = "extra == 'all'", specifier = ">=7.2,<8" },
     { name = "redis", extras = ["hiredis"], marker = "extra == 'redis'", specifier = ">=7.2,<8" },
-    { name = "uuid", specifier = ">=1.30" },
 ]
 provides-extras = ["fast-json", "redis", "full", "all"]
 
@@ -390,17 +388,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/96/8e/709914eb2b5749865801041647dc7f4e6d00b549cfe88b65ca192995f07c/distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d", size = 614605, upload-time = "2025-07-17T16:52:00.465Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16", size = 469047, upload-time = "2025-07-17T16:51:58.613Z" },
-]
-
-[[package]]
-name = "dotenv"
-version = "0.9.9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "python-dotenv" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/b7/545d2c10c1fc15e48653c91efde329a790f2eecfbbf2bd16003b5db2bab0/dotenv-0.9.9-py2.py3-none-any.whl", hash = "sha256:29cf74a087b31dafdb5a446b6d7e11cbce8ed2741540e2339c69fbef92c94ce9", size = 1892, upload-time = "2025-02-19T22:15:01.647Z" },
 ]
 
 [[package]]
@@ -1768,12 +1755,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/c7/24/5f1b3bdffd70275f6
 wheels = [
     { url = "https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl", hash = "sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4", size = 131584, upload-time = "2026-01-07T16:24:42.685Z" },
 ]
-
-[[package]]
-name = "uuid"
-version = "1.30"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ce/63/f42f5aa951ebf2c8dac81f77a8edcc1c218640a2a35a03b9ff2d4aa64c3d/uuid-1.30.tar.gz", hash = "sha256:1f87cc004ac5120466f36c5beae48b4c48cc411968eed0eaecd3da82aa96193f", size = 5811, upload-time = "2007-05-26T11:13:24Z" }
 
 [[package]]
 name = "uuid-utils"

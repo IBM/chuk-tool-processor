@@ -749,12 +749,12 @@ class InProcessStrategy(ExecutionStrategy):
             all_tools = await self.registry.list_tools()
 
             # Look for exact matches in tool name (ignoring namespace)
-            for namespace, registered_name in all_tools:
-                if registered_name == tool_name:
-                    logger.debug(f"Fuzzy match: found '{registered_name}' in namespace '{namespace}'")
-                    tool = await self.registry.get_tool(registered_name, namespace)
+            for tool_info in all_tools:
+                if tool_info.name == tool_name:
+                    logger.debug(f"Fuzzy match: found '{tool_info.name}' in namespace '{tool_info.namespace}'")
+                    tool = await self.registry.get_tool(tool_info.name, tool_info.namespace)
                     if tool is not None:
-                        return tool, namespace
+                        return tool, tool_info.namespace
 
             # Log all available tools for debugging
             logger.debug(f"Available tools: {all_tools}")

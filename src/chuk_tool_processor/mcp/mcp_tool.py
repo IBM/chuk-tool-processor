@@ -327,10 +327,8 @@ class MCPTool:
                 )
                 return True
 
-            # Fallback - try very quick operation with short timeout
-            server_info: list[dict[str, Any]] = await asyncio.wait_for(  # type: ignore[arg-type]
-                self._sm.get_server_info(), timeout=1.0
-            )
+            # Fallback - check server_info synchronously (get_server_info is not a coroutine)
+            server_info: list[dict[str, Any]] = self._sm.get_server_info()
             healthy = len(server_info) > 0
             logger.debug(f"StreamManager health for '{self.tool_name}': {healthy} (via server_info)")
             return healthy
