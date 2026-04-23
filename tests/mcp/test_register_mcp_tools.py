@@ -7,6 +7,7 @@ from chuk_tool_processor.mcp.mcp_tool import MCPTool
 from chuk_tool_processor.mcp.register_mcp_tools import register_mcp_tools
 from chuk_tool_processor.mcp.stream_manager import StreamManager
 from chuk_tool_processor.registry.interface import ToolRegistryInterface
+from chuk_tool_processor.registry.metadata import ToolInfo
 
 
 class TestRegisterMCPTools:
@@ -453,7 +454,13 @@ class TestUpdateMCPToolsStreamManager:
         """Mock registry with some registered tools."""
 
         reg = Mock(spec=ToolRegistryInterface)
-        reg.list_tools = AsyncMock(return_value=[("mcp", "tool1"), ("mcp", "tool2"), ("other", "tool3")])
+        reg.list_tools = AsyncMock(
+            return_value=[
+                ToolInfo(namespace="mcp", name="tool1"),
+                ToolInfo(namespace="mcp", name="tool2"),
+                ToolInfo(namespace="other", name="tool3"),
+            ]
+        )
 
         # Create mock tools
         tool1 = Mock()
@@ -511,7 +518,7 @@ class TestUpdateMCPToolsStreamManager:
         from chuk_tool_processor.mcp.register_mcp_tools import update_mcp_tools_stream_manager
 
         reg = Mock(spec=ToolRegistryInterface)
-        reg.list_tools = AsyncMock(return_value=[("other", "tool1")])
+        reg.list_tools = AsyncMock(return_value=[ToolInfo(namespace="other", name="tool1")])
 
         new_mgr = Mock(spec=StreamManager)
 
@@ -527,7 +534,7 @@ class TestUpdateMCPToolsStreamManager:
         from chuk_tool_processor.mcp.register_mcp_tools import update_mcp_tools_stream_manager
 
         reg = Mock(spec=ToolRegistryInterface)
-        reg.list_tools = AsyncMock(return_value=[("test", "plain_tool")])
+        reg.list_tools = AsyncMock(return_value=[ToolInfo(namespace="test", name="plain_tool")])
 
         # Tool without set_stream_manager method
         plain_tool = Mock(spec=[])  # No set_stream_manager
@@ -547,7 +554,9 @@ class TestUpdateMCPToolsStreamManager:
         from chuk_tool_processor.mcp.register_mcp_tools import update_mcp_tools_stream_manager
 
         reg = Mock(spec=ToolRegistryInterface)
-        reg.list_tools = AsyncMock(return_value=[("test", "tool1"), ("test", "tool2")])
+        reg.list_tools = AsyncMock(
+            return_value=[ToolInfo(namespace="test", name="tool1"), ToolInfo(namespace="test", name="tool2")]
+        )
 
         # First tool succeeds, second fails
         tool1 = Mock()
@@ -593,7 +602,7 @@ class TestUpdateMCPToolsStreamManager:
         from chuk_tool_processor.mcp.register_mcp_tools import update_mcp_tools_stream_manager
 
         reg = Mock(spec=ToolRegistryInterface)
-        reg.list_tools = AsyncMock(return_value=[("test", "missing_tool")])
+        reg.list_tools = AsyncMock(return_value=[ToolInfo(namespace="test", name="missing_tool")])
         reg.get_tool = AsyncMock(return_value=None)
 
         new_mgr = Mock(spec=StreamManager)

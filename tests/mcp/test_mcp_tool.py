@@ -17,8 +17,8 @@ class TestMCPTool:
         mock = Mock(spec=StreamManager)
         mock.call_tool = AsyncMock()
 
-        # UPDATED: Mock the new health check methods instead of ping_servers
-        mock.get_server_info = AsyncMock(return_value=[{"name": "test", "status": "Up"}])
+        # UPDATED: get_server_info is synchronous — use Mock, not AsyncMock
+        mock.get_server_info = Mock(return_value=[{"name": "test", "status": "Up"}])
         mock.transports = {"test": Mock()}  # Mock transports dict
 
         # Legacy ping_servers (not used in new health check but may be used elsewhere)

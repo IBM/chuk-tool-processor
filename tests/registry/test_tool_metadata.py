@@ -56,19 +56,18 @@ async def test_invalid_name_type_raises():
 
 
 @pytest.mark.asyncio
-async def test_is_async_coerced_to_bool():
-    tm1 = ToolMetadata(name="t1", is_async="yes")
-    assert tm1.is_async is True
-    tm2 = ToolMetadata(name="t2", is_async=0)
-    # Even with False input, should be coerced to True in async-native mode
-    assert tm2.is_async is True
+async def test_is_async_default_is_true():
+    tm = ToolMetadata(name="t1")
+    assert tm.is_async is True
 
 
 @pytest.mark.asyncio
-async def test_ensure_async_validator():
-    # Test that the model_validator ensures is_async is True
-    tm = ToolMetadata(name="test", is_async=False)
-    assert tm.is_async is True
+async def test_is_async_respects_value():
+    # is_async now reflects the actual value — no forced override
+    tm_false = ToolMetadata(name="test", is_async=False)
+    assert tm_false.is_async is False
+    tm_true = ToolMetadata(name="test2", is_async=True)
+    assert tm_true.is_async is True
 
 
 @pytest.mark.asyncio
