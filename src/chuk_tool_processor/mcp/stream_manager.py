@@ -720,6 +720,53 @@ class StreamManager:
                 logger.debug("resources/read failed for %s: %s", name, exc)
         return {}
 
+    async def get_prompt(
+        self,
+        name: str,
+        arguments: dict[str, Any] | None = None,
+        server_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Get a specific prompt by name.
+
+        Args:
+            name: Prompt name to fetch.
+            arguments: Optional arguments used to render the prompt template.
+            server_name: Optional server name to target. If None, tries all.
+
+        Returns:
+            Prompt result dict from the server, or empty dict on error.
+        """
+        if self._closed:
+            return {}
+
+        # If a specific server is requested, try just that one
+        if server_name and server_name in self.transports:
+            transport = self.transports[server_name]
+            if hasattr(transport, "get_prompt"):
+                try:
+                    return await asyncio.wait_for(
+                        transport.get_prompt(name, arguments),
+                        timeout=self.timeout_config.operation,
+                    )
+                except Exception as exc:
+                    logger.debug("prompts/get failed for %s: %s", server_name, exc)
+                    return {}
+
+        # Try all transports until one succeeds
+        for tname, transport in self.transports.items():
+            if not hasattr(transport, "get_prompt"):
+                continue
+            try:
+                result = await asyncio.wait_for(
+                    transport.get_prompt(name, arguments),
+                    timeout=self.timeout_config.operation,
+                )
+                if result:
+                    return result
+            except Exception as exc:
+                logger.debug("prompts/get failed for %s: %s", tname, exc)
+        return {}
+
     async def list_prompts(self) -> list[dict[str, Any]]:
         if self._closed:
             return []
