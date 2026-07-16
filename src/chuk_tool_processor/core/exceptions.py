@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from difflib import get_close_matches
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -240,17 +240,16 @@ class ToolNotFoundError(ToolProcessorError):
         if available_tools:
             # Handle both tuple format (namespace, name) and string format
             if isinstance(available_tools[0], tuple):
-                # Type narrowing: cast to the expected type
-                tuple_tools = cast(list[tuple[str, str]], available_tools)
-                all_tool_names = [name for _, name in tuple_tools]
+                # mypy narrows available_tools to list[tuple[str, str]] here
+                all_tool_names = [name for _, name in available_tools]
                 # Also check for namespace:name format
-                full_names = [f"{ns}:{name}" for ns, name in tuple_tools]
+                full_names = [f"{ns}:{name}" for ns, name in available_tools]
                 similar_in_namespace = get_close_matches(tool_name, all_tool_names, n=3, cutoff=0.6)
                 similar_full = get_close_matches(f"{namespace}:{tool_name}", full_names, n=3, cutoff=0.6)
                 similar_tools = list(similar_in_namespace) + list(similar_full)
             else:
-                # Type narrowing: cast to the expected type
-                str_tools = cast(list[str], available_tools)
+                # mypy narrows available_tools to list[str] here
+                str_tools = available_tools
                 similar_tools = list(get_close_matches(tool_name, str_tools, n=3, cutoff=0.6))
 
         if similar_tools:

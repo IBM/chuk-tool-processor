@@ -198,7 +198,7 @@ class RedisToolRegistry(ToolRegistryInterface):
                 await self._redis.set(tool_key, self._serialize_metadata(tool_metadata))
 
                 # Track namespace
-                await self._redis.sadd(self._namespace_key(), namespace)  # type: ignore[misc]
+                await self._redis.sadd(self._namespace_key(), namespace)
 
                 # Cache tool locally
                 self._tools.setdefault(namespace, {})[key] = tool
@@ -290,7 +290,7 @@ class RedisToolRegistry(ToolRegistryInterface):
 
     async def list_namespaces(self) -> list[str]:
         """List all namespaces."""
-        namespaces = await self._redis.smembers(self._namespace_key())  # type: ignore[misc]
+        namespaces = await self._redis.smembers(self._namespace_key())
         return [ns.decode() if isinstance(ns, bytes) else ns for ns in namespaces]
 
     async def list_metadata(self, namespace: str | None = None) -> list[ToolMetadata]:
@@ -429,7 +429,7 @@ class RedisToolRegistry(ToolRegistryInterface):
             # Move from deferred to active
             tool_key = self._tool_key(namespace, name)
             await self._redis.set(tool_key, self._serialize_metadata(metadata))
-            await self._redis.sadd(self._namespace_key(), namespace)  # type: ignore[misc]
+            await self._redis.sadd(self._namespace_key(), namespace)
 
             self._tools.setdefault(namespace, {})[name] = tool
             self._loaded_deferred_tools.add(loaded_key)

@@ -19,14 +19,6 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-all]
-        files: ^src/
-        args: [--ignore-missing-imports]
-
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
@@ -41,6 +33,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src --ignore-missing-imports
+        language: system
+        pass_filenames: false
+        files: ^src/
       - id: pytest-check
         name: pytest-check
         entry: uv run pytest
