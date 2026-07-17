@@ -545,7 +545,12 @@ class HTTPStreamableTransport(MCPBaseTransport):
             response = await asyncio.wait_for(
                 send_resources_list(self._read_stream, self._write_stream), timeout=self.default_timeout
             )
-            return response if isinstance(response, dict) else {}
+            if isinstance(response, dict):
+                return response
+            # send_* helpers return a pydantic *Result model; normalize to a dict
+            if hasattr(response, "model_dump"):
+                return response.model_dump()
+            return {}
         except TimeoutError:
             logger.error("List resources timed out")
             self._consecutive_failures += 1
@@ -564,7 +569,12 @@ class HTTPStreamableTransport(MCPBaseTransport):
             response = await asyncio.wait_for(
                 send_prompts_list(self._read_stream, self._write_stream), timeout=self.default_timeout
             )
-            return response if isinstance(response, dict) else {}
+            if isinstance(response, dict):
+                return response
+            # send_* helpers return a pydantic *Result model; normalize to a dict
+            if hasattr(response, "model_dump"):
+                return response.model_dump()
+            return {}
         except TimeoutError:
             logger.error("List prompts timed out")
             self._consecutive_failures += 1
@@ -608,7 +618,12 @@ class HTTPStreamableTransport(MCPBaseTransport):
                 send_prompts_get(self._read_stream, self._write_stream, name, arguments or {}),
                 timeout=self.default_timeout,
             )
-            return response if isinstance(response, dict) else {}
+            if isinstance(response, dict):
+                return response
+            # send_* helpers return a pydantic *Result model; normalize to a dict
+            if hasattr(response, "model_dump"):
+                return response.model_dump()
+            return {}
         except TimeoutError:
             logger.error("Get prompt timed out")
             self._consecutive_failures += 1

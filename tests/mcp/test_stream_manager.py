@@ -1006,6 +1006,50 @@ class TestStreamManager:
 
         assert prompts == []
 
+    @pytest.mark.asyncio
+    async def test_get_prompt(self, stream_manager, mock_transport):
+        """get_prompt returns the prompt result from the transport."""
+        stream_manager.transports["server1"] = mock_transport
+        mock_transport.get_prompt = AsyncMock(
+            return_value={"messages": [{"role": "user", "content": {"type": "text", "text": "hi"}}]}
+        )
+
+        result = await stream_manager.get_prompt("greet", {"who": "world"})
+
+        assert result["messages"][0]["role"] == "user"
+        mock_transport.get_prompt.assert_awaited_once_with("greet", {"who": "world"})
+
+    @pytest.mark.asyncio
+    async def test_get_prompt_specific_server(self, stream_manager, mock_transport):
+        """get_prompt targets a named server and skips the others."""
+        other = AsyncMock(spec=MCPBaseTransport)
+        other.get_prompt = AsyncMock(return_value={"messages": []})
+        stream_manager.transports["s1"] = other
+        stream_manager.transports["s2"] = mock_transport
+        mock_transport.get_prompt = AsyncMock(return_value={"messages": [{"role": "assistant", "content": {}}]})
+
+        result = await stream_manager.get_prompt("p", server_name="s2")
+
+        assert result["messages"][0]["role"] == "assistant"
+        mock_transport.get_prompt.assert_awaited_once()
+        other.get_prompt.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_prompt_when_closed(self, stream_manager):
+        """get_prompt returns empty when the manager is closed."""
+        await stream_manager.close()
+
+        assert await stream_manager.get_prompt("p") == {}
+
+    @pytest.mark.asyncio
+    async def test_get_prompt_exception(self, stream_manager):
+        """get_prompt swallows transport errors and returns {}."""
+        tr = AsyncMock(spec=MCPBaseTransport)
+        tr.get_prompt = AsyncMock(side_effect=Exception("Failed"))
+        stream_manager.transports["s"] = tr
+
+        assert await stream_manager.get_prompt("p") == {}
+
     # ------------------------------------------------------------------ #
     # call_tool method with timeout tests                               #
     # ------------------------------------------------------------------ #

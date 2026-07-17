@@ -120,6 +120,19 @@ class MCPBaseTransport(ABC):
         """
         raise NotImplementedError
 
+    async def get_prompt(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        """
+        Get a specific prompt by name.
+
+        Args:
+            name: Prompt name to fetch.
+            arguments: Optional arguments used to render the prompt template.
+
+        Returns:
+            Dictionary containing the prompt result or empty dict if not supported.
+        """
+        raise NotImplementedError
+
     # ------------------------------------------------------------------ #
     #  Metrics and monitoring (all transports should support these)     #
     # ------------------------------------------------------------------ #
