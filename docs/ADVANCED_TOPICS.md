@@ -97,15 +97,23 @@ mcp_format = spec.to_mcp()
 
 ### Programmatic Execution (37% Token Savings)
 
-The built-in **code sandbox** works with ANY LLM (OpenAI, Claude, Llama, etc.):
+The built-in **code executor** (`CodeSandbox`) works with ANY LLM (OpenAI, Claude, Llama, etc.):
+
+> [!WARNING]
+> `CodeSandbox` runs code in-process via `exec()` and is **not** a security
+> boundary — the restricted builtins are trivially escapable, so untrusted code
+> is not contained. Execution is disabled unless you pass
+> `allow_unsafe_execution=True`, which you should do **only for code you fully
+> trust**. Never feed it untrusted or LLM-generated code expecting containment.
+> See [security.md](./security.md).
 
 ```python
 from chuk_tool_processor.execution import CodeSandbox
 
-# Create sandbox
-sandbox = CodeSandbox(timeout=30.0)
+# allow_unsafe_execution asserts the code is trusted (in-process, no isolation).
+sandbox = CodeSandbox(timeout=30.0, allow_unsafe_execution=True)
 
-# LLM generates Python code
+# Trusted Python code
 code = """
 # Process data using tools in a loop
 results = []
@@ -115,7 +123,7 @@ for i in range(1, 6):
 return results
 """
 
-# Tool-processor executes safely
+# Runs in-process (no isolation) -- trusted code only
 result = await sandbox.execute(code, namespace="math")
 # All 5 tool calls happen in single execution context!
 ```
@@ -131,7 +139,7 @@ result = await sandbox.execute(code, namespace="math")
 - **Works with ANY LLM** (OpenAI, Claude, Llama, Mistral, etc.)
 - **37% token reduction** on complex workflows
 - **Faster execution** (no API round-trips for intermediate values)
-- **Safe execution** (restricted builtins, timeouts, tool allowlist)
+- **Convenience controls** (reduced builtins, timeouts, tool allowlist) — these are *not* a security boundary; see [security.md](./security.md)
 
 **Complete Example:**
 
@@ -146,8 +154,11 @@ processor, manager = await setup_mcp_stdio(
     namespace="math"
 )
 
-# Create code sandbox
-sandbox = CodeSandbox()
+# Create code executor.
+# WARNING: LLM-generated code is untrusted. CodeSandbox provides no isolation,
+# so running it as shown here is unsafe -- this illustrates the API only. For
+# untrusted code, run it inside real OS/process-level isolation. See security.md.
+sandbox = CodeSandbox(allow_unsafe_execution=True)
 
 # LLM generates this code
 llm_generated_code = """
@@ -162,7 +173,7 @@ for i in range(1, 6):
 return results
 """
 
-# Execute safely
+# Execute (in-process, no isolation)
 result = await sandbox.execute(llm_generated_code, namespace="math")
 print(result)  # All tool calls executed!
 ```

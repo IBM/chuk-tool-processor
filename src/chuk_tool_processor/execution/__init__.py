@@ -8,7 +8,12 @@ from chuk_tool_processor.execution.bulkhead import (
     BulkheadLimitType,
     BulkheadStats,
 )
-from chuk_tool_processor.execution.code_sandbox import CodeExecutionError, CodeSandbox
+from chuk_tool_processor.execution.code_sandbox import (
+    CodeExecutionError,
+    CodeSandbox,
+    SandboxSecurityWarning,
+    UnsafeExecutionError,
+)
 
 __all__ = [
     # Bulkhead
@@ -20,4 +25,6 @@ __all__ = [
     # Code sandbox
     "CodeSandbox",
     "CodeExecutionError",
+    "UnsafeExecutionError",
+    "SandboxSecurityWarning",
 ]

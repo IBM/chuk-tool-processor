@@ -6,18 +6,24 @@ Demonstrates the tool-processor's built-in code execution sandbox that enables
 programmatic tool orchestration for ANY LLM (not just those with built-in code
 execution like Claude).
 
-The sandbox:
-- Executes Python code safely with registered tools
-- Provides security controls and resource limits
+The code executor:
+- Runs Python code in-process with access to registered tools
 - Works with any LLM that can generate Python code
+
+WARNING: CodeSandbox is NOT a security boundary. It runs code in-process via
+exec(); its restricted builtins are trivially escapable, so untrusted code is
+not contained. Execution is disabled unless you pass allow_unsafe_execution=True,
+which you should do ONLY for code you fully trust (as this demo does with its
+own hard-coded code). Never feed it untrusted or LLM-generated code expecting
+containment. See docs/security.md.
 
 Usage:
     uv run python examples/code_sandbox_demo.py
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 # Use local source
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -85,11 +91,13 @@ async def demonstrate_code_sandbox():
     print("-" * 80)
     print()
 
-    sandbox = CodeSandbox(timeout=30.0)
-    print("✅ Code sandbox created with:")
+    # allow_unsafe_execution=True: this demo only runs its own trusted code.
+    sandbox = CodeSandbox(timeout=30.0, allow_unsafe_execution=True)
+    print("✅ Code executor created with:")
     print("   • 30 second timeout")
-    print("   • Safe Python builtins only")
+    print("   • Reduced Python builtins (convenience, not isolation)")
     print("   • Access to registered tools")
+    print("   • ⚠️  No isolation boundary — trusted code only")
     print()
 
     # ========================================================================
@@ -241,11 +249,12 @@ return {
     print("   • Any LLM that can generate Python code")
     print()
 
-    print("✅ Security:")
-    print("   • Sandboxed execution (restricted builtins)")
-    print("   • Resource limits (timeout, memory)")
-    print("   • Tool allowlist (only registered tools)")
-    print("   • No file I/O or network access from code")
+    print("⚠️  Security (IMPORTANT — read docs/security.md):")
+    print("   • NOT a sandbox: runs in-process via exec(), no isolation")
+    print("   • Restricted builtins are trivially escapable (no containment)")
+    print("   • Disabled by default; allow_unsafe_execution=True = trusted code only")
+    print("   • Timeout is a convenience limit, not a containment guarantee")
+    print("   • For untrusted/LLM code use OS/process-level isolation instead")
     print()
 
     print("✅ Performance:")
@@ -267,8 +276,9 @@ return {
     print("=" * 80)
     print()
 
-    print("🎉 The tool-processor now provides programmatic execution for ANY LLM!")
-    print("   LLM generates Python → Tool-processor executes safely")
+    print("🎉 The tool-processor provides programmatic execution for ANY LLM!")
+    print("   LLM generates Python → you run it in real isolation → results back")
+    print("   (CodeSandbox itself is in-process and trusted-code-only — see security.md)")
     print()
 
 

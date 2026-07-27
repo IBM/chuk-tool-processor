@@ -1,15 +1,25 @@
 # chuk_tool_processor/execution/code_sandbox.py
 """
-Safe Python code execution sandbox with tool access.
+In-process Python code execution with tool access.
 
 Enables programmatic tool orchestration by executing Python code that can call
-registered tools. Provides security controls and resource limits.
+registered tools.
+
+.. warning::
+    This module does **not** provide a security boundary. The code you pass to
+    :class:`CodeSandbox` runs with ``exec()`` in the host process, with the host
+    process's own privileges. The restricted ``__builtins__`` namespace only
+    limits *name resolution*; it does not prevent attribute access on reachable
+    objects and is trivially escapable, so it cannot contain untrusted code.
+    Never pass untrusted or LLM-generated code to this class expecting it to be
+    contained. See ``docs/security.md``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import sys
+import warnings
 from io import StringIO
 from typing import Any
 
@@ -23,19 +33,44 @@ class CodeExecutionError(Exception):
     pass
 
 
+class UnsafeExecutionError(CodeExecutionError):
+    """Raised when code execution is attempted without opting in to unsafe execution."""
+
+    pass
+
+
+class SandboxSecurityWarning(UserWarning):
+    """Warns that CodeSandbox is not an isolation boundary."""
+
+    pass
+
+
 class CodeSandbox:
     """
-    Safe Python code execution environment with tool access.
+    In-process Python code executor with tool access.
 
-    Allows executing Python code that can call registered tools, enabling
-    programmatic tool orchestration for any LLM (not just those with built-in
-    code execution like Claude).
+    Runs Python code that can call registered tools, enabling programmatic tool
+    orchestration for any LLM (not just those with built-in code execution like
+    Claude).
+
+    .. warning::
+        **This is not a security sandbox.** Code runs in the host process via
+        ``exec()`` with the host's privileges. The restricted ``__builtins__``
+        namespace is a convenience/footgun-reduction measure, not an isolation
+        boundary — it is trivially escapable and cannot contain untrusted code.
+        Because of this, execution is **disabled by default** and must be
+        explicitly enabled with ``allow_unsafe_execution=True``. Only enable it
+        for code you fully trust (i.e. code you authored), never for untrusted or
+        LLM-generated code. For untrusted code you need real OS/process-level
+        isolation (a locked-down subprocess/container, or a WASM interpreter).
+        See ``docs/security.md``.
 
     Example:
         ```python
         from chuk_tool_processor.execution.code_sandbox import CodeSandbox
 
-        sandbox = CodeSandbox()
+        # You are asserting the code is trusted by passing allow_unsafe_execution.
+        sandbox = CodeSandbox(allow_unsafe_execution=True)
 
         code = '''
         # Call tools in a loop
@@ -50,11 +85,10 @@ class CodeSandbox:
         print(result)  # Output from the code
         ```
 
-    Security:
-        - Restricted builtins (no file I/O, imports, etc.)
-        - Resource limits (configurable timeout)
-        - Tool allowlist (only registered tools accessible)
-        - Isolated execution environment
+    What this class does provide (convenience, not security):
+        - A reduced ``__builtins__`` namespace (limits accidental name use)
+        - A configurable execution timeout
+        - Tool functions injected for registered tools only
     """
 
     def __init__(
@@ -62,6 +96,7 @@ class CodeSandbox:
         registry: ToolRegistryInterface | None = None,
         timeout: float = 30.0,
         allowed_builtins: set[str] | None = None,
+        allow_unsafe_execution: bool = False,
     ):
         """
         Initialize code sandbox.
@@ -70,9 +105,15 @@ class CodeSandbox:
             registry: Tool registry to use (default: global registry)
             timeout: Maximum execution time in seconds
             allowed_builtins: Set of allowed builtin functions
+            allow_unsafe_execution: Must be ``True`` to run any code. This is an
+                explicit acknowledgement that ``execute()`` runs code in-process
+                with no isolation boundary (see the class docstring). Leave it
+                ``False`` (the default) unless every ``code`` string passed to
+                ``execute()`` is fully trusted.
         """
         self.registry = registry
         self.timeout = timeout
+        self.allow_unsafe_execution = allow_unsafe_execution
         self.allowed_builtins = allowed_builtins or {
             # Type constructors
             "int",
@@ -133,8 +174,30 @@ class CodeSandbox:
             Result of code execution (value of last expression or return statement)
 
         Raises:
+            UnsafeExecutionError: If ``allow_unsafe_execution`` was not enabled.
             CodeExecutionError: If execution fails or times out
         """
+        # Fail closed: this class is not an isolation boundary, so refuse to run
+        # anything unless the caller has explicitly opted in.
+        if not self.allow_unsafe_execution:
+            raise UnsafeExecutionError(
+                "CodeSandbox.execute() is disabled by default because it is NOT a "
+                "security boundary: code runs in-process via exec() and the restricted "
+                "builtins are trivially escapable, so untrusted code is not contained. "
+                "Pass CodeSandbox(allow_unsafe_execution=True) only for code you fully "
+                "trust. For untrusted or LLM-generated code use real OS/process-level "
+                "isolation instead (see docs/security.md)."
+            )
+
+        # Loud, once-per-instance reminder that there is no isolation here.
+        warnings.warn(
+            "CodeSandbox executes code in-process with no isolation boundary; the "
+            "restricted builtins do not contain untrusted code. Only run trusted code. "
+            "See docs/security.md.",
+            SandboxSecurityWarning,
+            stacklevel=2,
+        )
+
         # Get registry
         if self.registry is None:
             self.registry = await get_default_registry()
@@ -207,7 +270,10 @@ class CodeSandbox:
 
     async def _build_safe_globals(self, namespace: str | None, initial_vars: dict[str, Any]) -> dict[str, Any]:
         """
-        Build safe global scope with tool access.
+        Build the global scope with a reduced builtins namespace and tool access.
+
+        Note: the reduced ``__builtins__`` is a convenience measure, not a
+        security boundary (see the class docstring).
 
         Args:
             namespace: Namespace to filter tools

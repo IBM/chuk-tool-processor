@@ -13,14 +13,19 @@ Tests cover:
 import pytest
 import pytest_asyncio
 
-from chuk_tool_processor.execution.code_sandbox import CodeExecutionError, CodeSandbox
+from chuk_tool_processor.execution.code_sandbox import (
+    CodeExecutionError,
+    CodeSandbox,
+    SandboxSecurityWarning,
+    UnsafeExecutionError,
+)
 from chuk_tool_processor.registry import get_default_registry, register_tool, reset_registry
 
 
 @pytest_asyncio.fixture
 async def sandbox():
     """Create a fresh code sandbox for each test."""
-    return CodeSandbox(timeout=5.0)
+    return CodeSandbox(timeout=5.0, allow_unsafe_execution=True)
 
 
 @pytest_asyncio.fixture
@@ -181,8 +186,52 @@ return step2["result"]
         assert result == "16"  # (5 + 3) * 2 = 16
 
 
-class TestSecurity:
-    """Test security restrictions."""
+class TestFailClosed:
+    """Execution must be explicitly opted into; it is not a security boundary."""
+
+    @pytest.mark.asyncio
+    async def test_execute_disabled_by_default(self):
+        """Without allow_unsafe_execution the sandbox refuses to run any code."""
+        sandbox = CodeSandbox(timeout=5.0)  # note: no allow_unsafe_execution
+        with pytest.raises(UnsafeExecutionError):
+            await sandbox.execute("result = 1 + 1")
+
+    @pytest.mark.asyncio
+    async def test_unsafe_execution_error_is_code_execution_error(self):
+        """UnsafeExecutionError subclasses CodeExecutionError for compatibility."""
+        assert issubclass(UnsafeExecutionError, CodeExecutionError)
+
+    @pytest.mark.asyncio
+    async def test_execute_warns_when_enabled(self):
+        """Enabling execution emits a SandboxSecurityWarning on each run."""
+        sandbox = CodeSandbox(timeout=5.0, allow_unsafe_execution=True)
+        with pytest.warns(SandboxSecurityWarning):
+            await sandbox.execute("result = 1 + 1")
+
+    @pytest.mark.asyncio
+    async def test_restricted_builtins_are_not_a_boundary(self):
+        """
+        The reduced builtins do not stop ordinary attribute access, so code can
+        still walk the object graph to reach other loaded classes. This is why
+        execution is opt-in and trusted-code-only. See docs/security.md.
+        """
+        sandbox = CodeSandbox(timeout=5.0, allow_unsafe_execution=True)
+        code = """
+reachable = ().__class__.__bases__[0].__subclasses__()
+return [c.__name__ for c in reachable]
+"""
+        names = await sandbox.execute(code)
+        # Attribute access reaches classes beyond the allow-listed builtins.
+        assert isinstance(names, list)
+        assert len(names) > 0
+
+
+class TestRestrictedBuiltins:
+    """
+    The reduced builtins namespace blocks direct name use of dangerous builtins.
+    This is a convenience/footgun measure, NOT a security boundary (see
+    TestFailClosed.test_restricted_builtins_are_not_a_boundary).
+    """
 
     @pytest.mark.asyncio
     async def test_restricted_builtins(self, sandbox):
@@ -266,7 +315,7 @@ return x
     async def test_timeout_error(self):
         """Test that code execution times out."""
         # Create sandbox with very short timeout
-        sandbox = CodeSandbox(timeout=0.1)
+        sandbox = CodeSandbox(timeout=0.1, allow_unsafe_execution=True)
 
         code = """
 import time
@@ -281,7 +330,7 @@ return "done"
     @pytest.mark.skip(reason="CPU-bound infinite loops cannot be interrupted by asyncio.wait_for - known limitation")
     async def test_timeout_with_infinite_loop(self):
         """Test timeout with infinite loop."""
-        sandbox = CodeSandbox(timeout=0.5)
+        sandbox = CodeSandbox(timeout=0.5, allow_unsafe_execution=True)
 
         code = """
 while True:
@@ -441,7 +490,7 @@ class TestNamespaceFiltering:
     @pytest.mark.asyncio
     async def test_namespace_isolation(self, setup_test_tools):
         """Test that tools are only accessible from their namespace."""
-        sandbox = CodeSandbox()
+        sandbox = CodeSandbox(allow_unsafe_execution=True)
 
         # This should work - tools are in 'test' namespace
         code = """
@@ -548,7 +597,7 @@ class TestCustomTimeout:
     @pytest.mark.asyncio
     async def test_long_timeout(self):
         """Test with longer timeout."""
-        sandbox = CodeSandbox(timeout=10.0)
+        sandbox = CodeSandbox(timeout=10.0, allow_unsafe_execution=True)
 
         code = """
 total = 0
@@ -562,7 +611,7 @@ return total
     @pytest.mark.asyncio
     async def test_very_short_timeout(self):
         """Test with very short timeout."""
-        sandbox = CodeSandbox(timeout=0.01)
+        sandbox = CodeSandbox(timeout=0.01, allow_unsafe_execution=True)
 
         # Even simple code might timeout with 0.01s
         code = """

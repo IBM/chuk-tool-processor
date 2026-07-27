@@ -88,6 +88,9 @@ filterwarnings = [
     "ignore:coroutine .* was never awaited:RuntimeWarning",
     # PytestCollectionWarning for test helper classes with __init__
     "ignore::pytest.PytestCollectionWarning",
+    # CodeSandbox emits this on every trusted execute() in tests; the dedicated
+    # test uses pytest.warns() which records regardless of this filter.
+    "ignore::chuk_tool_processor.execution.code_sandbox.SandboxSecurityWarning",
 ]
 
 [dependency-groups]

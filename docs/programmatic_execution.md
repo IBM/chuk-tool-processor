@@ -55,24 +55,33 @@ Total: 1 API call, 3K tokens (85% reduction!), ~2 seconds
 
 ## Provider Support
 
-### Option 1: Tool-Processor Code Sandbox (Works with ANY LLM)
+### Option 1: Tool-Processor Code Executor (Works with ANY LLM)
 
-**NEW**: The tool-processor now includes a **built-in code execution sandbox** that works with any LLM!
+The tool-processor includes a **built-in in-process code executor** (`CodeSandbox`) that runs Python which can call your registered tools, working with any LLM.
 
-**Benefits**:
+> [!WARNING]
+> **`CodeSandbox` is not a security boundary.** It runs code with `exec()` in the
+> host process, with the host's privileges. The restricted `__builtins__` only
+> limits name resolution — it is trivially escapable and cannot contain untrusted
+> code. For this reason execution is **disabled by default** and you must pass
+> `allow_unsafe_execution=True`. Only do so for code you fully trust (code you
+> authored). **Do not pass untrusted or LLM-generated code to it** expecting
+> containment — for that you need real OS/process-level isolation. See
+> [Security Guide](./security.md).
+
+**Characteristics**:
 - Works with **any LLM** (OpenAI, Anthropic, Llama, Mistral, etc.)
-- LLM generates Python → Tool-processor executes safely
-- No need for LLM-specific code execution features
-- Full security controls and resource limits
+- No LLM-specific code execution features needed
+- Reduced builtins namespace and a configurable timeout (convenience, **not** isolation)
 
-**Example**:
+**Example** (trusted code only):
 ```python
 from chuk_tool_processor.execution import CodeSandbox
 
-# Create sandbox
-sandbox = CodeSandbox(timeout=30.0)
+# allow_unsafe_execution asserts you trust every code string you run here.
+sandbox = CodeSandbox(timeout=30.0, allow_unsafe_execution=True)
 
-# LLM generates this code
+# Trusted, in-process code
 code = """
 # Process data using tools in a loop
 results = []
@@ -82,7 +91,7 @@ for i in range(1, 6):
 return results
 """
 
-# Tool-processor executes it safely
+# Runs in-process (no isolation) -- only for trusted code
 result = await sandbox.execute(code, namespace="math")
 ```
 
@@ -161,8 +170,12 @@ Write Python code to: {user_request}
 # 2. LLM generates code
 code = await llm.generate(prompt)
 
-# 3. Execute safely with tool-processor sandbox
-sandbox = CodeSandbox()
+# 3. Execute the code.
+#    WARNING: CodeSandbox is NOT isolation. LLM-generated code is untrusted and
+#    the restricted builtins are trivially escapable, so running it here as-is is
+#    unsafe -- shown only to illustrate the API. For untrusted code run it inside
+#    real OS/process-level isolation instead. See ./security.md.
+sandbox = CodeSandbox(allow_unsafe_execution=True)
 result = await sandbox.execute(code, namespace="your_namespace")
 ```
 
@@ -183,18 +196,39 @@ result = await sandbox.execute(code, namespace="your_namespace")
 
 ## Security Considerations
 
+### The built-in `CodeSandbox` is NOT a sandbox
+
+> [!CAUTION]
+> Despite its name, `CodeSandbox` does **not** provide isolation and does **not**
+> satisfy the requirements below. It executes code in-process via `exec()`; the
+> restricted `__builtins__` only limits name lookup and is trivially bypassable,
+> so it cannot contain untrusted code. It is safe **only** for code you fully
+> trust, which is why `execute()` is disabled unless you pass
+> `allow_unsafe_execution=True`. Never use it as the boundary for untrusted or
+> LLM-generated code. See the [Security Guide](./security.md) for details and
+> remediation options.
+
 ### Sandboxing Requirements
 
-**CRITICAL**: Never execute LLM-generated code without sandboxing!
+**CRITICAL**: Never execute LLM-generated code without real isolation!
 
-Minimum requirements:
-- Restricted Python environment (no `os`, `sys`, `subprocess`)
+Minimum requirements (none of which `CodeSandbox` provides):
+- Restricted Python environment (no `os`, `sys`, `subprocess`) — enforced at the
+  OS/process level, **not** by swapping `__builtins__`
 - Network access controls
 - File system isolation
 - Resource limits (CPU, memory, time)
 - Tool allowlist (only registered tools accessible)
 
 ### Example Sandbox Setup
+
+> [!WARNING]
+> The snippet below builds an allow-listed `__builtins__` dict — the **same
+> insufficient pattern** `CodeSandbox` uses. It imports `RestrictedPython` but
+> does not actually apply it. An allow-listed builtins dict is not an isolation
+> boundary (see the caution above). Treat this only as an illustration of the
+> tool-wiring shape; for real containment use a locked-down subprocess/container
+> or a WASM interpreter as described in [security.md](./security.md).
 
 ```python
 import RestrictedPython
