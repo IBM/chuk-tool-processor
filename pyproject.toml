@@ -151,6 +151,10 @@ omit = [
 
 [tool.mypy]
 python_version = "3.11"
+# The isolation guest bootstrap is a standalone script copied into the guest at
+# runtime (it imports a sibling _wire.py, not the package); don't type-check it
+# as library code.
+exclude = ["execution/isolation/guest_bootstrap\\.py$"]
 # Enable more warnings for better type safety
 warn_return_any = true
 warn_unused_configs = true
