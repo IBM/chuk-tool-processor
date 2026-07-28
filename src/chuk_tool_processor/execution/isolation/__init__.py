@@ -15,7 +15,12 @@ from chuk_tool_processor.execution.isolation.backend import (
     IsolationBackend,
     IsolationError,
 )
-from chuk_tool_processor.execution.isolation.backends import LocalProcessBackend, SeatbeltBackend
+from chuk_tool_processor.execution.isolation.backends import (
+    BubblewrapBackend,
+    DockerBackend,
+    LocalProcessBackend,
+    SeatbeltBackend,
+)
 from chuk_tool_processor.execution.isolation.limits import IsolationLimits
 from chuk_tool_processor.execution.isolation.result import IsolatedResult
 from chuk_tool_processor.execution.isolation.runner import IsolatedCodeRunner
@@ -34,4 +39,6 @@ __all__ = [
     # Backends
     "LocalProcessBackend",
     "SeatbeltBackend",
+    "DockerBackend",
+    "BubblewrapBackend",
 ]
