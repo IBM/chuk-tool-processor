@@ -3,6 +3,34 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.24.0]
+
+### Added
+
+- **`IsolatedCodeRunner`** — runs untrusted / LLM-generated code behind a real
+  OS/runtime boundary, with tool access brokered back to the host over a single
+  audited channel (JSON, never pickle). This is the safe counterpart to
+  `CodeSandbox`; see `docs/isolated_execution.md`.
+- Isolation backends behind a common `IsolationBackend` protocol:
+  `SeatbeltBackend` (macOS `sandbox-exec`), `DockerBackend` (throwaway
+  container), `BubblewrapBackend` (Linux namespaces), and `LocalProcessBackend`
+  (no isolation; dev/testing only — the runner refuses it unless
+  `allow_no_isolation=True`).
+- `IsolationLimits`, `IsolatedResult`, and the `IsolationBackend` protocol,
+  exported from `chuk_tool_processor.execution.isolation`.
+
+### Changed
+
+- Documentation now routes untrusted / LLM-generated code to
+  `IsolatedCodeRunner`, and no longer presents the subprocess `IsolatedStrategy`
+  as a security boundary — it provides crash/fault isolation for tool dispatch,
+  not isolation of an orchestration code string.
+
+### Notes
+
+- Experimental Windows (AppContainer) and WASM backends live on separate
+  branches and are not part of this release.
+
 ## [0.23.0]
 
 ### Security
