@@ -66,6 +66,10 @@ class DockerBackend(SubprocessBackend):
             "run",
             "--rm",
             "-i",
+            # Image is pre-pulled in run_guest; never pull during the sandboxed
+            # run (a --network none run can't reach a registry anyway).
+            "--pull",
+            "never",
             "--name",
             self._container_name(job),
             "--read-only",
@@ -96,6 +100,11 @@ class DockerBackend(SubprocessBackend):
         return argv
 
     async def run_guest(self, job: GuestJob, *, host_socket_path: str) -> GuestOutcome:
+        # Acquire the image up front (with the daemon's network) so the sandboxed
+        # `docker run --network none --pull never` never has to reach a registry.
+        pull_error = await self._ensure_image()
+        if pull_error:
+            return GuestOutcome(exit_code=1, stderr=pull_error, timed_out=False)
         # Killing the docker client on timeout does not stop the container, so
         # force-remove by name in a finally (name is derived from the unique
         # per-run token, making this concurrency-safe).
@@ -103,6 +112,31 @@ class DockerBackend(SubprocessBackend):
             return await super().run_guest(job, host_socket_path=host_socket_path)
         finally:
             await self._force_remove(self._container_name(job))
+
+    async def _ensure_image(self) -> str | None:
+        """Ensure ``self.image`` is present locally; pull it if not. Returns an error string on failure."""
+        inspect = await asyncio.create_subprocess_exec(
+            self.docker_bin,
+            "image",
+            "inspect",
+            self.image,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        if await inspect.wait() == 0:
+            return None
+        pull = await asyncio.create_subprocess_exec(
+            self.docker_bin,
+            "pull",
+            self.image,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _out, err = await pull.communicate()
+        if pull.returncode != 0:
+            detail = (err or b"").decode(errors="replace").strip()[:400]
+            return f"failed to pull image {self.image!r}: {detail}"
+        return None
 
     async def _force_remove(self, name: str) -> None:
         with contextlib.suppress(Exception):
