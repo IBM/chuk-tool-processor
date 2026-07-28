@@ -81,6 +81,10 @@ class DockerBackend(SubprocessBackend):
             "no-new-privileges",
             "--cpus",
             str(self.cpus),
+            # Run as the host uid so the container (with no CAP_DAC_OVERRIDE) can
+            # read the 0700 staging dir and reach the broker socket dir, and so
+            # the guest runs unprivileged. POSIX host only.
+            *(["--user", f"{os.getuid()}:{os.getgid()}"] if hasattr(os, "getuid") else []),
             "-e",
             "PYTHONDONTWRITEBYTECODE=1",
         ]
