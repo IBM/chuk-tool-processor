@@ -231,7 +231,7 @@ class CodeSandbox:
 
                     # Compile and execute wrapper
                     try:
-                        exec(compile(wrapped_code, "<sandbox>", "exec"), safe_globals, local_scope)  # nosec B102 - Intentional code execution in controlled sandbox with restricted builtins
+                        exec(compile(wrapped_code, "<sandbox>", "exec"), safe_globals, local_scope)  # nosec B102 - intentional exec of caller-provided trusted code; gated behind allow_unsafe_execution (not an isolation boundary)
                     except SyntaxError as e:
                         raise CodeExecutionError(f"Syntax error in code: {e}")
 
@@ -245,7 +245,7 @@ class CodeSandbox:
                     # Execute synchronous code directly
                     try:
                         compiled = compile(code, "<sandbox>", "exec")
-                        exec(compiled, safe_globals, local_scope)  # nosec B102 - Intentional code execution in controlled sandbox with restricted builtins
+                        exec(compiled, safe_globals, local_scope)  # nosec B102 - intentional exec of caller-provided trusted code; gated behind allow_unsafe_execution (not an isolation boundary)
                     except SyntaxError as e:
                         raise CodeExecutionError(f"Syntax error in code: {e}")
 
