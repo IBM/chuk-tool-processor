@@ -143,7 +143,7 @@ class TestDockerIntegration:
             namespace="math",
             limits=IsolationLimits(wall_timeout=60.0),
         )
-        code = "import socket\n" "socket.create_connection(('1.1.1.1', 53), timeout=3)\n" "return 'NET_OK'"
+        code = "import socket\nsocket.create_connection(('1.1.1.1', 53), timeout=3)\nreturn 'NET_OK'"
         r = await runner.run(code)
         assert r.ok is False
 
