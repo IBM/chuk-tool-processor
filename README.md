@@ -58,7 +58,7 @@ Parsers (XML / OpenAI / JSON)
    Execution Strategy
    ┌──────────────────────┐
    │ • InProcess          │  ← Fast, trusted
-   │ • Isolated/Subprocess│  ← Safe, untrusted
+   │ • Isolated/Subprocess│  ← Crash isolation
    │ • Remote via MCP     │  ← Distributed
    └──────────────────────┘
 ```
@@ -160,7 +160,7 @@ results = await processor.process(json_output)
 | **Pattern Bulkheads** | Glob patterns like `"db.*": 3` for grouped concurrency limits |
 | **Scoped Registries** | Isolated registries for multi-tenant apps and testing |
 | **ExecutionContext** | Request-scoped metadata propagation (user, tenant, tracing, deadlines) |
-| **Isolated Strategy** | Subprocess execution for untrusted code (zero crash blast radius) |
+| **Isolated Strategy** | Subprocess tool execution for crash/fault isolation (zero crash blast radius). Not a security boundary — for untrusted/LLM *code*, see [`IsolatedCodeRunner`](docs/isolated_execution.md) |
 | **Redis Registry** | Distributed tool registry for multi-process/multi-machine deployments |
 
 ### Advanced Scheduling
@@ -573,6 +573,8 @@ See [ERRORS.md](docs/ERRORS.md) for complete error taxonomy.
 | [**GUARDS.md**](docs/GUARDS.md) | Runtime guards for safety, validation, and resource management |
 | [**MCP_INTEGRATION.md**](docs/MCP_INTEGRATION.md) | HTTP Streamable, STDIO, SSE, OAuth, Middleware Stack |
 | [**ADVANCED_TOPICS.md**](docs/ADVANCED_TOPICS.md) | Deferred loading, code sandbox, isolated strategy, testing |
+| [**isolated_execution.md**](docs/isolated_execution.md) | Running untrusted/LLM code behind a real boundary (`IsolatedCodeRunner`, backends) |
+| [**security.md**](docs/security.md) | Security model: `CodeSandbox` vs real isolation, running untrusted code safely |
 | [**CONFIGURATION.md**](docs/CONFIGURATION.md) | All config options and environment variables |
 | [**OBSERVABILITY.md**](docs/OBSERVABILITY.md) | OpenTelemetry, Prometheus, metrics reference |
 | [**ERRORS.md**](docs/ERRORS.md) | Error codes and handling patterns |
@@ -663,7 +665,7 @@ pip install chuk-tool-processor[all]
 **Use CHUK Tool Processor when:**
 - Your LLM calls tools or APIs
 - You need retries, timeouts, caching, or rate limits
-- You need to run untrusted tools safely
+- You need crash isolation for flaky tools, or a real boundary for untrusted/LLM code ([`IsolatedCodeRunner`](docs/isolated_execution.md))
 - Your tools are local or remote (MCP)
 - You need multi-tenant isolation
 - You want production-grade observability

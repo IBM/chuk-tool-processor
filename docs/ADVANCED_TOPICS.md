@@ -184,7 +184,16 @@ See `examples/code_sandbox_demo.py` and `examples/advanced_tool_use_math_server.
 
 ## Using Isolated Strategy
 
-Use `IsolatedStrategy` when running untrusted, third-party, or potentially unsafe code that shouldn't share the same process as your main app.
+Use `IsolatedStrategy` for **crash/fault isolation** of tool execution — it runs each registered **tool call** in a separate worker process so a hanging or crashing tool can't take down your app.
+
+> [!WARNING]
+> `IsolatedStrategy` is **not a security boundary**. Workers run as the same OS
+> user with no seccomp/namespace/rlimit confinement, and tool arguments/results
+> cross the boundary via **pickle**. It also only governs how *registered tool
+> calls* are dispatched — it never executes an orchestration **code string**. For
+> running untrusted or LLM-generated *code*, use
+> [`IsolatedCodeRunner`](./isolated_execution.md) (real OS/container/WASM
+> isolation with brokered tool access), not this strategy and not `CodeSandbox`.
 
 ```python
 import asyncio
@@ -206,25 +215,28 @@ async def main():
 asyncio.run(main())
 ```
 
-### Security & Isolation — Threat Model
+### What IsolatedStrategy actually protects against
 
 | Aspect | Protection |
 |--------|------------|
-| **Process Isolation** | Untrusted code runs in subprocesses |
-| **Crash Blast Radius** | Zero — faults don't bring down your app |
-| **Resource Limits** | Use containers with `--cpus`, `--memory` |
-| **Network Isolation** | Egress filtering via container network policy |
+| **Crash Blast Radius** | Zero — a crashing/hanging tool doesn't bring down your app |
+| **Process separation** | Each tool call runs in a separate worker process (fault, not security, isolation) |
+| **Timeouts** | Per-call deadlines terminate stuck workers |
 | **Secrets** | Never injected by default — pass explicitly |
+
+This is **fault isolation, not a security sandbox** — see the warning above. For a
+real security boundary around untrusted code, use
+[`IsolatedCodeRunner`](./isolated_execution.md), optionally with a container/gVisor
+runtime for `--cpus`/`--memory`/egress limits.
 
 ### When to Use Each Strategy
 
-| Scenario | Strategy |
-|----------|----------|
-| Trusted internal tools | InProcessStrategy |
-| External/user-provided code | IsolatedStrategy |
-| LLM-generated code execution | IsolatedStrategy |
-| Performance-critical path | InProcessStrategy |
-| Tools that might crash | IsolatedStrategy |
+| Scenario | Use |
+|----------|-----|
+| Trusted internal tools | `InProcessStrategy` |
+| Performance-critical path | `InProcessStrategy` |
+| Tools that might crash or hang | `IsolatedStrategy` (crash isolation) |
+| Untrusted / third-party / LLM-generated **code** | [`IsolatedCodeRunner`](./isolated_execution.md) (real isolation) — *not* `IsolatedStrategy`, *not* `CodeSandbox` |
 
 ---
 

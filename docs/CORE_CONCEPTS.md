@@ -93,8 +93,13 @@ class SearchTool:
 
 | Strategy | Use Case | Trade-offs |
 |----------|----------|------------|
-| **InProcessStrategy** | Fast, trusted tools | Speed ✅, Isolation ❌ |
-| **IsolatedStrategy** | Untrusted or risky code | Isolation ✅, Speed ❌ |
+| **InProcessStrategy** | Fast, trusted tools | Speed ✅, Crash isolation ❌ |
+| **IsolatedStrategy** | Tools that may crash/hang | Crash isolation ✅, Speed ❌ |
+
+> `IsolatedStrategy` gives **crash/fault isolation** (separate worker processes),
+> **not** a security boundary — workers are the same user and results cross via
+> pickle. For untrusted or LLM-generated *code*, use
+> [`IsolatedCodeRunner`](./isolated_execution.md), not a strategy.
 
 ### Parallel Execution
 
@@ -125,21 +130,20 @@ async def main():
         )
     )
     async with processor:
-        # Tools run in separate subprocesses (safe)
+        # Each tool call runs in a separate worker process (crash isolation)
         results = await processor.process(tool_calls)
 ```
 
-> **Note:** `IsolatedStrategy` is an alias of `SubprocessStrategy` for backwards compatibility. Use `IsolatedStrategy` for clarity—it better communicates the security boundary intent.
+> **Note:** `IsolatedStrategy` is an alias of `SubprocessStrategy` for backwards compatibility. It provides crash/fault isolation for tool dispatch, **not** a security sandbox; for untrusted/LLM code use [`IsolatedCodeRunner`](./isolated_execution.md).
 
 ### When to Use Each Strategy
 
-| Scenario | Recommended Strategy |
-|----------|---------------------|
-| Trusted internal tools | InProcessStrategy |
-| External/user-provided code | IsolatedStrategy |
-| LLM-generated code execution | IsolatedStrategy |
-| Performance-critical path | InProcessStrategy |
-| Tools that might crash | IsolatedStrategy |
+| Scenario | Recommended |
+|----------|-------------|
+| Trusted internal tools | `InProcessStrategy` |
+| Performance-critical path | `InProcessStrategy` |
+| Tools that might crash or hang | `IsolatedStrategy` (crash isolation) |
+| Untrusted / third-party / LLM-generated **code** | [`IsolatedCodeRunner`](./isolated_execution.md) — real isolation, not a strategy |
 
 ---
 
