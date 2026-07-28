@@ -135,8 +135,36 @@ async def _run_user_code(code: str, exec_globals: dict):
     return local_scope.get("__result__")
 
 
+async def _connect(job: dict):
+    """Connect to the broker endpoint per the job's transport."""
+    transport = job.get("transport", "unix")
+    endpoint = job.get("endpoint") or job.get("socket_path")
+    if transport == "pipe":
+        return await _open_pipe(endpoint)
+    return await asyncio.open_unix_connection(endpoint)
+
+
+async def _open_pipe(name: str):
+    """Windows named-pipe client -> (StreamReader, StreamWriter). Retries while busy."""
+    import time
+
+    loop = asyncio.get_running_loop()
+    last = None
+    for _ in range(50):  # ~5s of retries for pipe-busy / not-yet-listening
+        try:
+            reader = asyncio.StreamReader()
+            protocol = asyncio.StreamReaderProtocol(reader)
+            transport, _proto = await loop.create_pipe_connection(lambda p=protocol: p, name)  # type: ignore[attr-defined]  # noqa: B023
+            writer = asyncio.StreamWriter(transport, protocol, reader, loop)
+            return reader, writer
+        except (FileNotFoundError, OSError) as exc:  # pipe not ready / all instances busy
+            last = exc
+            time.sleep(0.1)
+    raise last or ConnectionError(f"could not connect to pipe {name}")
+
+
 async def _main(job: dict) -> int:
-    reader, writer = await asyncio.open_unix_connection(job["socket_path"])
+    reader, writer = await _connect(job)
     client = _RpcClient(reader, writer)
     client.start()
     await client.hello(job["token"])

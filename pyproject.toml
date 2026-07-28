@@ -53,6 +53,12 @@ redis = [
     "redis[hiredis]>=8,<9",
 ]
 
+# Windows AppContainer isolation backend (experimental). Needs pywin32 for the
+# named-pipe broker transport's security descriptor. Only installs on Windows.
+isolation-windows = [
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
 # Full feature set with performance optimizations
 full = [
     "orjson>=3.10.0,<4",
@@ -187,12 +193,33 @@ module = [
     "httpx_sse.*",
     "opentelemetry.*",
     "prometheus_client.*",
+    # Windows-only (pywin32); present only on Windows / in the windows CI job.
+    "win32api",
+    "win32con",
+    "win32event",
+    "win32file",
+    "win32job",
+    "win32pipe",
+    "win32process",
+    "win32security",
+    "pywintypes",
+    "ntsecuritycon",
 ]
 ignore_missing_imports = true
 
 # Be less strict for test files
 [[tool.mypy.overrides]]
 module = ["tests.*", "sample_tools.*"]
+ignore_errors = true
+
+# Experimental Windows-only backend modules: use Win32 ctypes/pywin32 APIs that
+# typeshed only exposes on win32, and are verified via Windows CI, not mypy here.
+[[tool.mypy.overrides]]
+module = [
+    "chuk_tool_processor.execution.isolation._winpipe",
+    "chuk_tool_processor.execution.isolation._winproc",
+    "chuk_tool_processor.execution.isolation.backends.windows",
+]
 ignore_errors = true
 
 # TODO: Gradually reduce these overrides as code is improved

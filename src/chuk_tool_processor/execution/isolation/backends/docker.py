@@ -45,21 +45,21 @@ class DockerBackend(SubprocessBackend):
     def _apply_rlimits_in_preexec(self) -> bool:
         return False
 
-    def _guest_ctx(self, workdir: str, host_socket_path: str) -> _LaunchCtx:
-        socket_name = os.path.basename(host_socket_path)
+    def _guest_ctx(self, workdir: str, host_endpoint: str) -> _LaunchCtx:
+        socket_name = os.path.basename(host_endpoint)
         return _LaunchCtx(
             workdir=workdir,
-            host_socket_path=host_socket_path,
+            host_endpoint=host_endpoint,
             bootstrap_guest=f"{_GUEST_MOUNT}/guest_bootstrap.py",
             job_guest=f"{_GUEST_MOUNT}/job.json",
-            socket_guest=f"{_SOCK_MOUNT}/{socket_name}",
+            endpoint_guest=f"{_SOCK_MOUNT}/{socket_name}",
         )
 
     def _container_name(self, job: GuestJob) -> str:
         return f"ctiso-{job.token[:24]}"
 
     def _wrapper_argv(self, ctx: _LaunchCtx, job: GuestJob) -> list[str]:
-        socket_dir = os.path.dirname(ctx.host_socket_path)
+        socket_dir = os.path.dirname(ctx.host_endpoint)
         lim = job.limits
         argv = [
             self.docker_bin,
@@ -103,7 +103,7 @@ class DockerBackend(SubprocessBackend):
         ]
         return argv
 
-    async def run_guest(self, job: GuestJob, *, host_socket_path: str) -> GuestOutcome:
+    async def run_guest(self, job: GuestJob, *, host_endpoint: str, transport: str = "unix") -> GuestOutcome:
         # Acquire the image up front (with the daemon's network) so the sandboxed
         # `docker run --network none --pull never` never has to reach a registry.
         pull_error = await self._ensure_image()
@@ -113,7 +113,7 @@ class DockerBackend(SubprocessBackend):
         # force-remove by name in a finally (name is derived from the unique
         # per-run token, making this concurrency-safe).
         try:
-            return await super().run_guest(job, host_socket_path=host_socket_path)
+            return await super().run_guest(job, host_endpoint=host_endpoint, transport=transport)
         finally:
             await self._force_remove(self._container_name(job))
 

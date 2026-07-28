@@ -8,9 +8,9 @@ isolation and is **trusted-code-only** (see [security.md](./security.md)).
 
 - **`CodeSandbox`** — in-process `exec()`, no boundary. Only for code you wrote.
 - **`IsolatedCodeRunner`** — code runs inside a container / macOS Seatbelt /
-  Linux bubblewrap sandbox; tools are brokered back to the host over one audited
-  channel. For code you did **not** write. (A WASM backend is in development on a
-  separate branch.)
+  Linux bubblewrap / Windows AppContainer sandbox; tools are brokered back to the
+  host over one audited channel. For code you did **not** write. (A WASM backend
+  is in development on a separate branch.)
 
 ## Why not just reuse the subprocess strategy?
 
@@ -84,6 +84,7 @@ non-isolating backend unless you pass `allow_no_isolation=True`.
 | `DockerBackend` | Strong§ | Linux Docker host | `docker`/`podman` CLI + daemon | throwaway container, `--network none`, read-only root, dropped caps, runs as host uid |
 | `SeatbeltBackend` | Strong* | macOS | `sandbox-exec` (built in) | no inet, no fs-writes outside work/tmp, secret dirs unreadable |
 | `BubblewrapBackend` | Strong¶ | Linux | `bwrap` binary | user/mount/pid/net namespaces |
+| `WindowsBackend` | Strong‡ | Windows | `pywin32` | AppContainer + Job Object (+ low integrity) |
 | `LocalProcessBackend` | **None** | any | — | dev/testing only; runner refuses it without `allow_no_isolation=True` |
 
 § `DockerBackend` runs each guest in a throwaway `docker run --rm` container
@@ -106,11 +107,37 @@ allowlist aborts CPython. The denied secret paths are configurable —
 `DEFAULT_DENY_READ_PATHS` (`~/.ssh`, `~/.aws`, cloud creds, keychains, …).
 `sandbox-exec` is deprecated by Apple but functional.
 
+‡ `WindowsBackend` is **experimental** — the AppContainer + Job Object launch and
+the named-pipe broker transport are verified via Windows CI, not on the author's
+machine; see below.
+
 A **WASM backend** (wasmtime/WASI — the strongest boundary by construction) is in
 development on a separate branch; it is not part of this release.
 
 Install notes: the Docker, Seatbelt, and bubblewrap backends need no Python
-dependencies (they shell out to the respective binary).
+dependencies (they shell out to the respective binary). Windows needs
+`pip install chuk-tool-processor[isolation-windows]` (pywin32).
+
+## Windows backend (experimental)
+
+`WindowsBackend` is the Windows analogue of Seatbelt:
+
+    macOS Seatbelt profile  ≈  Windows AppContainer + Job Object (+ low integrity)
+
+- The guest runs as an **AppContainer** with **no capabilities** — so no network
+  and no access to the user's files by construction — at low integrity.
+- It is placed in a **Job Object** that caps memory and active processes and
+  kills the whole tree on close.
+- Because AppContainers can't use unix sockets and loopback is blocked for them
+  without a network-capability hole, the broker channel is a **named pipe** whose
+  security descriptor grants `ALL APPLICATION PACKAGES` (a local IPC object, not
+  the network). The staging dir is granted to the same SID (via `icacls`) so the
+  guest can read the bootstrap and write its output.
+
+It is availability-gated on Windows + `pywin32`, so `is_available()` is `False`
+elsewhere and the runner won't select it. The implementation is a first draft
+verified through the `isolation` GitHub Actions workflow (which installs pywin32
+and sets `CTP_TEST_ISOLATION_WINDOWS=1`); details may change as CI exercises it.
 
 ## Resource limits
 
@@ -131,9 +158,9 @@ dependencies (they shell out to the respective binary).
 What the boundary is expected to stop, and where enforced:
 
 - **Arbitrary host code execution / sandbox escape** → the backend (container,
-  namespace, or Seatbelt). Even a full `CodeSandbox`-style `__subclasses__()`
-  escape only reaches the *guest's* interpreter, which has no host access beyond
-  the broker socket.
+  namespace, Seatbelt, or AppContainer). Even a full `CodeSandbox`-style
+  `__subclasses__()` escape only reaches the *guest's* interpreter, which has no
+  host access beyond the broker channel.
 - **Reaching tools you didn't expose** → `ToolBroker` allowlist + namespace.
 - **Tool-call flooding** → `max_tool_calls`.
 - **Network exfiltration** → `allow_network=False` (default).

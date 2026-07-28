@@ -39,10 +39,10 @@ class _LaunchCtx:
     """Paths for one launch, both host-side and guest-visible."""
 
     workdir: str  # host path of the staging dir
-    host_socket_path: str  # broker socket on the host
+    host_endpoint: str  # broker endpoint on the host (unix socket path here)
     bootstrap_guest: str  # bootstrap path as the guest sees it
     job_guest: str  # job.json path as the guest sees it
-    socket_guest: str  # broker socket path as the guest sees it
+    endpoint_guest: str  # broker endpoint as the guest sees it
 
 
 class SubprocessBackend:
@@ -64,14 +64,14 @@ class SubprocessBackend:
         """Sandbox launcher prefix, e.g. ['sandbox-exec', '-p', profile]."""
         return []
 
-    def _guest_ctx(self, workdir: str, host_socket_path: str) -> _LaunchCtx:
+    def _guest_ctx(self, workdir: str, host_endpoint: str) -> _LaunchCtx:
         """Map host paths to guest-visible paths (identity for same-fs backends)."""
         return _LaunchCtx(
             workdir=workdir,
-            host_socket_path=host_socket_path,
+            host_endpoint=host_endpoint,
             bootstrap_guest=os.path.join(workdir, "guest_bootstrap.py"),
             job_guest=os.path.join(workdir, "job.json"),
-            socket_guest=host_socket_path,
+            endpoint_guest=host_endpoint,
         )
 
     def _apply_rlimits_in_preexec(self) -> bool:
@@ -84,17 +84,17 @@ class SubprocessBackend:
 
     # -- main flow --------------------------------------------------------- #
 
-    async def run_guest(self, job: GuestJob, *, host_socket_path: str) -> GuestOutcome:
+    async def run_guest(self, job: GuestJob, *, host_endpoint: str, transport: str = "unix") -> GuestOutcome:
         workdir = tempfile.mkdtemp(prefix="ctiso-")
         os.chmod(workdir, 0o700)
         try:
             shutil.copy2(_BOOTSTRAP_SRC, os.path.join(workdir, "guest_bootstrap.py"))
             shutil.copy2(_WIRE_SRC, os.path.join(workdir, "_wire.py"))
-            ctx = self._guest_ctx(workdir, host_socket_path)
+            ctx = self._guest_ctx(workdir, host_endpoint)
 
             import json
 
-            payload = job.payload(socket_path=ctx.socket_guest)
+            payload = job.payload(endpoint=ctx.endpoint_guest, transport=transport)
             with open(os.path.join(workdir, "job.json"), "w", encoding="utf-8") as fh:
                 json.dump(payload, fh)
 

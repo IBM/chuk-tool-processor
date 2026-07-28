@@ -11,6 +11,7 @@ blocks network and filesystem access.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from dataclasses import dataclass
 
@@ -25,9 +26,14 @@ from chuk_tool_processor.execution.isolation import (
     _wire,
 )
 
-# Isolated execution is POSIX-only in this release (the broker uses unix domain
-# sockets); skip the whole module on Windows.
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="isolated execution is POSIX-only in this release")
+# On Windows the broker uses the experimental named-pipe transport (needs
+# pywin32). Skip broker-executing tests there unless explicitly opted in — the
+# dedicated isolation CI job sets this. POSIX always runs them.
+_WIN_ISOLATION_OPTIN = os.environ.get("CTP_TEST_ISOLATION_WINDOWS") == "1"
+skip_windows_broker = pytest.mark.skipif(
+    sys.platform == "win32" and not _WIN_ISOLATION_OPTIN,
+    reason="Windows pipe transport is experimental; set CTP_TEST_ISOLATION_WINDOWS=1 to run",
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -130,8 +136,9 @@ class TestFailClosed:
 
 
 # --------------------------------------------------------------------------- #
-# Core execution via the Local backend (works everywhere)
+# Core execution via the Local backend (works everywhere; Windows via pipe)
 # --------------------------------------------------------------------------- #
+@skip_windows_broker
 class TestLocalExecution:
     @pytest.mark.asyncio
     async def test_add_loop(self, registry):

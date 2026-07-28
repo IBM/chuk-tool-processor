@@ -1,8 +1,11 @@
-name: Isolation integration
+name: Isolation backends
 
-# Runs the isolation backend integration tests (opt-in) against real runtimes.
-# The default matrix (test.yml) only covers the pure/unit tests; this job spins
-# up real Docker containers so the DockerBackend is verified end-to-end.
+# Exercises the isolation backends against real runtimes, separate from the
+# mandatory matrix so experimental backends don't block it while they are being
+# verified:
+#   * Linux   — Docker containers (CTP_TEST_ISOLATION_INTEGRATION)
+#   * Windows — experimental named-pipe transport + AppContainer backend
+#               (CTP_TEST_ISOLATION_WINDOWS + pywin32)
 
 on:
   push:
@@ -18,22 +21,33 @@ on:
   workflow_dispatch:
 
 jobs:
-  integration:
-    runs-on: ubuntu-latest
+  isolation:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     env:
-      # Opt in to the backend integration tests (real Docker daemon on ubuntu).
+      # Docker integration (Linux) + experimental Windows path. Each only takes
+      # effect where its runtime is present; harmless elsewhere.
       CTP_TEST_ISOLATION_INTEGRATION: "1"
+      CTP_TEST_ISOLATION_WINDOWS: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.3.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.3.2
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-      - run: uv python install 3.12
-      - run: uv sync --dev
-      # NB: bubblewrap is intentionally NOT installed here — GitHub runners block
-      # the netlink call bwrap uses to bring up loopback in a new net namespace
-      # ("RTM_NEWADDR: Operation not permitted"), so its integration test can't
-      # run here. It requires a real Linux host with unprivileged user namespaces.
-      - name: Isolation tests (Docker integration enabled)
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --dev
+      - name: Install pywin32 (Windows named-pipe transport)
+        if: runner.os == 'Windows'
+        run: uv pip install pywin32
+      # NB: bubblewrap is intentionally NOT installed — GitHub runners block the
+      # netlink call bwrap uses to bring up loopback in a new net namespace
+      # ("RTM_NEWADDR: Operation not permitted"); it needs a real Linux host.
+      - name: Run isolation tests
         run: uv run pytest tests/execution/isolation/ -v -o addopts=""

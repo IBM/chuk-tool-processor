@@ -5,10 +5,12 @@ from chuk_tool_processor.execution.isolation.backends.bubblewrap import Bubblewr
 from chuk_tool_processor.execution.isolation.backends.docker import DockerBackend
 from chuk_tool_processor.execution.isolation.backends.local import LocalProcessBackend
 from chuk_tool_processor.execution.isolation.backends.seatbelt import SeatbeltBackend
+from chuk_tool_processor.execution.isolation.backends.windows import WindowsBackend
 
 __all__ = [
     "LocalProcessBackend",
     "SeatbeltBackend",
     "DockerBackend",
     "BubblewrapBackend",
+    "WindowsBackend",
 ]

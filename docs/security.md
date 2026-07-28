@@ -78,8 +78,10 @@ result = await runner.run(untrusted_code)   # no network, no host fs, tools brok
 
 Backends, in roughly increasing isolation strength:
 
-1. **`SeatbeltBackend`** (macOS) / **`BubblewrapBackend`** (Linux) — OS sandbox:
-   resource limits, no network, filesystem confined, only the broker channel open.
+1. **`SeatbeltBackend`** (macOS) / **`BubblewrapBackend`** (Linux) /
+   **`WindowsBackend`** (Windows AppContainer + Job Object, experimental) — OS
+   sandbox: resource limits, no network, filesystem confined, only the broker
+   channel open.
 2. **`DockerBackend`** — one throwaway container per run (`--network none`,
    read-only root, dropped caps, memory/pids limits); works anywhere Docker/Podman
    runs. Combine with a gVisor/Firecracker runtime for microVM-grade isolation.

@@ -93,7 +93,7 @@ class IsolatedCodeRunner:
             namespace=ns,
             allowed_tools=self.allowed_tools,
         )
-        socket_path = await broker.start()
+        endpoint = await broker.start()
         try:
             job = GuestJob(
                 code=code,
@@ -103,7 +103,7 @@ class IsolatedCodeRunner:
                 initial_vars=initial_vars or {},
             )
             started = time.monotonic()
-            outcome = await self.backend.run_guest(job, host_socket_path=socket_path)
+            outcome = await self.backend.run_guest(job, host_endpoint=endpoint, transport=broker.transport or "unix")
             duration = time.monotonic() - started
             return self._assemble(outcome, broker, duration)
         finally:

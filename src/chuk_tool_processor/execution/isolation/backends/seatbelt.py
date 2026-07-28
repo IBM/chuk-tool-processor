@@ -87,7 +87,7 @@ class SeatbeltBackend(SubprocessBackend):
         return {"PYTHONDONTWRITEBYTECODE": "1"}
 
     def _profile(self, ctx: _LaunchCtx, job: GuestJob) -> str:  # noqa: ARG002 - uniform hook signature
-        socket_dir = os.path.dirname(ctx.socket_guest)
+        socket_dir = os.path.dirname(ctx.endpoint_guest)
         write_roots = [ctx.workdir, socket_dir, "/private/tmp", "/tmp"]
 
         lines = [

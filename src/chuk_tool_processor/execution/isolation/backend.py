@@ -35,21 +35,24 @@ class GuestJob:
     namespace: str | None = None
     initial_vars: dict[str, Any] = field(default_factory=dict)
 
-    def payload(self, *, socket_path: str) -> dict[str, Any]:
+    def payload(self, *, endpoint: str, transport: str) -> dict[str, Any]:
         """
         Build the JSON job payload handed to the guest bootstrap.
 
         Args:
-            socket_path: Path to the broker unix socket *as seen from inside the
-                guest* (a backend that remaps paths, e.g. a container bind mount,
-                passes the guest-side path here).
+            endpoint: The broker endpoint *as seen from inside the guest* — a unix
+                socket path (``transport="unix"``) or a named pipe name
+                (``transport="pipe"``). A backend that remaps paths (e.g. a
+                container bind mount) passes the guest-side value here.
+            transport: ``"unix"`` or ``"pipe"``; tells the guest how to connect.
         """
         lim = self.limits
         return {
             "code": self.code,
             "namespace": self.namespace,
             "token": self.token,
-            "socket_path": socket_path,
+            "endpoint": endpoint,
+            "transport": transport,
             "initial_vars": self.initial_vars,
             "limits": {
                 "cpu_timeout": lim.cpu_timeout,
@@ -90,15 +93,16 @@ class IsolationBackend(Protocol):
         """Return True if this backend's runtime is present and usable now."""
         ...
 
-    async def run_guest(self, job: GuestJob, *, host_socket_path: str) -> GuestOutcome:
+    async def run_guest(self, job: GuestJob, *, host_endpoint: str, transport: str) -> GuestOutcome:
         """
         Run ``job`` inside the isolation boundary.
 
         Args:
             job: The code, limits, and broker token to run.
-            host_socket_path: Path to the broker unix socket on the host. The
-                backend is responsible for making it reachable from inside the
-                guest (bind mount, shared namespace, etc.) and for telling the
-                guest the correct path via ``job.payload(socket_path=...)``.
+            host_endpoint: The broker endpoint on the host (unix socket path or
+                named pipe name). The backend makes it reachable from inside the
+                guest (bind mount, shared namespace, pipe ACL, etc.) and tells the
+                guest via ``job.payload(endpoint=..., transport=...)``.
+            transport: ``"unix"`` or ``"pipe"`` — the broker's transport kind.
         """
         ...

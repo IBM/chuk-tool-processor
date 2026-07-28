@@ -21,13 +21,10 @@ import asyncio
 import contextlib
 import dataclasses
 import json
-import os
-import shutil
-import tempfile
 from typing import Any
 
-from chuk_tool_processor.execution.isolation import _wire
 from chuk_tool_processor.execution.isolation.limits import IsolationLimits
+from chuk_tool_processor.execution.isolation.transport import BrokerListener, MessageChannel, start_listener
 from chuk_tool_processor.logging import get_logger
 from chuk_tool_processor.registry.interface import ToolRegistryInterface
 
@@ -74,47 +71,38 @@ class ToolBroker:
         self._namespace = namespace
         self._allowed_tools = allowed_tools
 
-        self._server: asyncio.AbstractServer | None = None
-        self._sock_dir: str | None = None
-        self._socket_path: str | None = None
+        self._listener: BrokerListener | None = None
 
         self._call_count = 0
         self._count_lock = asyncio.Lock()
-        self._write_lock = asyncio.Lock()
 
         self._result_future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
 
     # -- lifecycle --------------------------------------------------------- #
 
     async def start(self) -> str:
-        """Create the socket and start listening. Returns the host socket path."""
-        # 0700 temp dir so only this user can reach the socket.
-        self._sock_dir = tempfile.mkdtemp(prefix="cticode-")
-        os.chmod(self._sock_dir, 0o700)
-        self._socket_path = os.path.join(self._sock_dir, "broker.sock")
-        self._server = await asyncio.start_unix_server(self._handle_client, path=self._socket_path)
-        os.chmod(self._socket_path, 0o600)
-        logger.debug("Tool broker listening at %s", self._socket_path)
-        return self._socket_path
+        """Start the platform broker server. Returns the endpoint the guest connects to."""
+        self._listener = await start_listener(self._handle_client)
+        logger.debug("Tool broker listening (%s) at %s", self._listener.transport, self._listener.endpoint)
+        return self._listener.endpoint
 
     async def aclose(self) -> None:
-        """Stop the server and remove the socket directory."""
-        if self._server is not None:
-            self._server.close()
-            with contextlib.suppress(Exception):
-                await self._server.wait_closed()
-            self._server = None
-        if self._sock_dir is not None:
-            shutil.rmtree(self._sock_dir, ignore_errors=True)
-            self._sock_dir = None
+        """Stop the server and clean up its endpoint."""
+        if self._listener is not None:
+            await self._listener.aclose()
+            self._listener = None
         if not self._result_future.done():
             self._result_future.cancel()
 
     # -- accessors --------------------------------------------------------- #
 
     @property
-    def socket_path(self) -> str | None:
-        return self._socket_path
+    def endpoint(self) -> str | None:
+        return self._listener.endpoint if self._listener else None
+
+    @property
+    def transport(self) -> str | None:
+        return self._listener.transport if self._listener else None
 
     @property
     def tool_calls(self) -> int:
@@ -131,52 +119,50 @@ class ToolBroker:
 
     # -- connection handling ----------------------------------------------- #
 
-    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _handle_client(self, channel: MessageChannel) -> None:
         try:
-            hello = await _wire.recv(reader)
+            hello = await channel.recv()
             if hello.get("method") != "hello" or hello.get("token") != self._token:
                 logger.warning("Rejected guest connection: bad handshake")
-                await self._reply(writer, {"id": hello.get("id"), "ok": False, "error": "unauthorized"})
+                await self._reply(channel, {"id": hello.get("id"), "ok": False, "error": "unauthorized"})
                 return
-            await self._reply(writer, {"id": hello.get("id"), "ok": True})
+            await self._reply(channel, {"id": hello.get("id"), "ok": True})
 
             while True:
                 try:
-                    msg = await _wire.recv(reader)
-                except (EOFError, asyncio.IncompleteReadError):
+                    msg = await channel.recv()
+                except (EOFError, asyncio.IncompleteReadError, ConnectionError):
                     break
                 # Each request handled concurrently so guest asyncio.gather works.
-                asyncio.create_task(self._dispatch(msg, writer))
+                asyncio.create_task(self._dispatch(msg, channel))
         except Exception as exc:  # noqa: BLE001 - broker must never crash the host
             logger.debug("Broker connection error: %s", exc)
         finally:
-            with contextlib.suppress(Exception):
-                writer.close()
+            await channel.aclose()
 
-    async def _dispatch(self, msg: dict[str, Any], writer: asyncio.StreamWriter) -> None:
+    async def _dispatch(self, msg: dict[str, Any], channel: MessageChannel) -> None:
         method = msg.get("method")
         msg_id = msg.get("id")
         try:
             if method == "list_tools":
-                await self._reply(writer, {"id": msg_id, "ok": True, "value": await self._list_tools()})
+                await self._reply(channel, {"id": msg_id, "ok": True, "value": await self._list_tools()})
             elif method == "call_tool":
                 value = await self._call_tool(msg.get("params") or {})
-                await self._reply(writer, {"id": msg_id, "ok": True, "value": value})
+                await self._reply(channel, {"id": msg_id, "ok": True, "value": value})
             elif method == "result":
                 if not self._result_future.done():
                     self._result_future.set_result((msg.get("params") or {}).get("value"))
-                await self._reply(writer, {"id": msg_id, "ok": True})
+                await self._reply(channel, {"id": msg_id, "ok": True})
             else:
-                await self._reply(writer, {"id": msg_id, "ok": False, "error": f"unknown method: {method}"})
+                await self._reply(channel, {"id": msg_id, "ok": False, "error": f"unknown method: {method}"})
         except _BrokerReject as exc:
-            await self._reply(writer, {"id": msg_id, "ok": False, "error": str(exc)})
+            await self._reply(channel, {"id": msg_id, "ok": False, "error": str(exc)})
         except Exception as exc:  # noqa: BLE001 - surface as tool error, never crash host
-            await self._reply(writer, {"id": msg_id, "ok": False, "error": f"{type(exc).__name__}: {exc}"})
+            await self._reply(channel, {"id": msg_id, "ok": False, "error": f"{type(exc).__name__}: {exc}"})
 
-    async def _reply(self, writer: asyncio.StreamWriter, obj: dict[str, Any]) -> None:
-        async with self._write_lock:
-            with contextlib.suppress(Exception):
-                await _wire.send(writer, obj)
+    async def _reply(self, channel: MessageChannel, obj: dict[str, Any]) -> None:
+        with contextlib.suppress(Exception):
+            await channel.send(obj)
 
     # -- capabilities ------------------------------------------------------ #
 

@@ -25,11 +25,10 @@ from chuk_tool_processor.execution.isolation import (
     IsolatedCodeRunner,
     IsolationLimits,
     SeatbeltBackend,
+    WindowsBackend,
 )
 from chuk_tool_processor.execution.isolation.backend import GuestJob
-
-# Isolated execution is POSIX-only in this release; skip the module on Windows.
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="isolated execution is POSIX-only in this release")
+from chuk_tool_processor.execution.isolation.transport import default_transport
 
 # Backend integration tests need a real runtime (Docker daemon / bwrap) AND spin
 # up the broker; opt in explicitly so they don't run in the default CI matrix.
@@ -48,7 +47,7 @@ class TestDockerArgv:
         ctx = DockerBackend()._guest_ctx("/work", "/host/sock/broker.sock")
         assert ctx.bootstrap_guest == "/ctguest/guest_bootstrap.py"
         assert ctx.job_guest == "/ctguest/job.json"
-        assert ctx.socket_guest == "/ctsock/broker.sock"
+        assert ctx.endpoint_guest == "/ctsock/broker.sock"
 
     def test_wrapper_argv_hardening(self):
         b = DockerBackend(image="python:3.12-slim")
@@ -97,8 +96,9 @@ class TestBubblewrapArgv:
 
 
 # --------------------------------------------------------------------------- #
-# Seatbelt denylist configuration (pure profile construction; runs on any OS)
+# Seatbelt denylist configuration (pure profile construction; POSIX paths)
 # --------------------------------------------------------------------------- #
+@pytest.mark.skipif(sys.platform == "win32", reason="Seatbelt profile uses POSIX path formatting")
 class TestSeatbeltDenyReadPaths:
     def _profile(self, backend: SeatbeltBackend) -> str:
         ctx = backend._guest_ctx("/work", "/host/sock/broker.sock")
@@ -118,6 +118,50 @@ class TestSeatbeltDenyReadPaths:
         prof = self._profile(SeatbeltBackend(deny_read_paths=["~/only-this"]))
         assert os.path.realpath(os.path.expanduser("~/only-this")) in prof
         assert os.path.realpath(os.path.expanduser("~/.ssh")) not in prof  # defaults replaced
+
+
+# --------------------------------------------------------------------------- #
+# Windows (experimental) — platform gating + transport selection
+# --------------------------------------------------------------------------- #
+class TestWindows:
+    def test_default_transport_matches_platform(self):
+        assert default_transport() == ("pipe" if sys.platform == "win32" else "unix")
+
+    def test_unavailable_off_windows(self):
+        if sys.platform != "win32":
+            assert WindowsBackend().is_available() is False
+
+
+_WIN_BACKEND_OPTIN = WindowsBackend().is_available() and os.environ.get("CTP_TEST_ISOLATION_WINDOWS") == "1"
+
+
+@pytest.mark.skipif(
+    not _WIN_BACKEND_OPTIN,
+    reason="experimental: run on Windows with CTP_TEST_ISOLATION_WINDOWS=1",
+)
+class TestWindowsIntegration:
+    @pytest.mark.asyncio
+    async def test_add_loop(self):
+        runner = IsolatedCodeRunner(
+            WindowsBackend(),
+            registry=StubRegistry(),
+            namespace="math",
+            limits=IsolationLimits(wall_timeout=60.0),
+        )
+        r = await runner.run(ADD_LOOP)
+        assert r.ok is True and r.value == 15 and r.tool_calls == 5
+
+    @pytest.mark.asyncio
+    async def test_network_blocked(self):
+        runner = IsolatedCodeRunner(
+            WindowsBackend(),
+            registry=StubRegistry(),
+            namespace="math",
+            limits=IsolationLimits(wall_timeout=60.0),
+        )
+        code = "import socket\nsocket.create_connection(('1.1.1.1', 53), timeout=3)\nreturn 'NET_OK'"
+        r = await runner.run(code)
+        assert r.ok is False
 
 
 # --------------------------------------------------------------------------- #
