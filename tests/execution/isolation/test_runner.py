@@ -11,6 +11,7 @@ blocks network and filesystem access.
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass
 
 import pytest
@@ -23,6 +24,10 @@ from chuk_tool_processor.execution.isolation import (
     SeatbeltBackend,
     _wire,
 )
+
+# Isolated execution is POSIX-only in this release (the broker uses unix domain
+# sockets); skip the whole module on Windows.
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="isolated execution is POSIX-only in this release")
 
 
 # --------------------------------------------------------------------------- #

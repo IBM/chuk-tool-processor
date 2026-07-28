@@ -12,8 +12,12 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 
 import pytest
+
+# Same directory (prepend import mode); avoids a global sys.path change.
+from test_runner import ADD_LOOP, StubRegistry
 
 from chuk_tool_processor.execution.isolation import (
     BubblewrapBackend,
@@ -23,7 +27,13 @@ from chuk_tool_processor.execution.isolation import (
     SeatbeltBackend,
 )
 from chuk_tool_processor.execution.isolation.backend import GuestJob
-from tests.execution.isolation.test_runner import ADD_LOOP, StubRegistry
+
+# Isolated execution is POSIX-only in this release; skip the module on Windows.
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="isolated execution is POSIX-only in this release")
+
+# Backend integration tests need a real runtime (Docker daemon / bwrap) AND spin
+# up the broker; opt in explicitly so they don't run in the default CI matrix.
+_RUN_INTEGRATION = os.environ.get("CTP_TEST_ISOLATION_INTEGRATION") == "1"
 
 
 def _job(**limit_kw) -> GuestJob:
@@ -122,7 +132,10 @@ def _docker_up() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _docker_up(), reason="requires a running Docker daemon")
+@pytest.mark.skipif(
+    not (_RUN_INTEGRATION and _docker_up()),
+    reason="set CTP_TEST_ISOLATION_INTEGRATION=1 with a running Docker daemon",
+)
 class TestDockerIntegration:
     @pytest.mark.asyncio
     async def test_add_loop(self):
@@ -148,7 +161,10 @@ class TestDockerIntegration:
         assert r.ok is False
 
 
-@pytest.mark.skipif(not BubblewrapBackend().is_available(), reason="requires Linux bwrap")
+@pytest.mark.skipif(
+    not (_RUN_INTEGRATION and BubblewrapBackend().is_available()),
+    reason="set CTP_TEST_ISOLATION_INTEGRATION=1 on Linux with bwrap",
+)
 class TestBubblewrapIntegration:
     @pytest.mark.asyncio
     async def test_add_loop(self):
