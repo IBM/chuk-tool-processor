@@ -63,20 +63,34 @@ NOT a security boundary ...
 
 ## Running untrusted code safely
 
-If executing untrusted or LLM-generated code is a genuine requirement, put a real
-boundary between that code and your process. Standard options, roughly in order
-of increasing isolation:
+If executing untrusted or LLM-generated code is a genuine requirement, use
+[`IsolatedCodeRunner`](./isolated_execution.md) instead of `CodeSandbox`. It runs
+the code behind a real OS/runtime boundary and brokers tool access back to the
+host over a single audited channel (JSON, never pickle) — exactly the "narrow,
+audited RPC surface" pattern below, already built:
 
-1. **Separate subprocess as a locked-down user**, with `seccomp`, resource
-   limits (`RLIMIT_*`), no network namespace, and a read-only / ephemeral
-   filesystem.
-2. **Container / microVM isolation** — gVisor, Firecracker, or an equivalent
-   sandbox runtime, one throwaway instance per execution.
-3. **WebAssembly interpreter** (e.g. a WASM-compiled Python) so the guest code
-   cannot reach host syscalls at all.
+```python
+from chuk_tool_processor.execution.isolation import IsolatedCodeRunner, DockerBackend
 
-In every case, expose tools to the guest through a narrow, audited RPC surface
-rather than by handing it live Python objects.
+runner = IsolatedCodeRunner(DockerBackend(), namespace="math")
+result = await runner.run(untrusted_code)   # no network, no host fs, tools brokered
+```
+
+Backends, in roughly increasing isolation strength:
+
+1. **`SeatbeltBackend`** (macOS) / **`BubblewrapBackend`** (Linux) — OS sandbox:
+   resource limits, no network, filesystem confined, only the broker channel open.
+2. **`DockerBackend`** — one throwaway container per run (`--network none`,
+   read-only root, dropped caps, memory/pids limits); works anywhere Docker/Podman
+   runs. Combine with a gVisor/Firecracker runtime for microVM-grade isolation.
+
+A WASM backend (guest cannot reach host syscalls at all) is in development on a
+separate branch.
+
+In every case tools are exposed through the host-side broker (allowlist + call
+ceiling + per-run token), never by handing the guest live Python objects. See
+[isolated_execution.md](./isolated_execution.md) for the full model, limits, and
+how to add a custom backend.
 
 ## Reporting security issues
 

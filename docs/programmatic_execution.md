@@ -66,7 +66,9 @@ The tool-processor includes a **built-in in-process code executor** (`CodeSandbo
 > code. For this reason execution is **disabled by default** and you must pass
 > `allow_unsafe_execution=True`. Only do so for code you fully trust (code you
 > authored). **Do not pass untrusted or LLM-generated code to it** expecting
-> containment — for that you need real OS/process-level isolation. See
+> containment — for that use
+> [`IsolatedCodeRunner`](./isolated_execution.md), which runs code behind a real
+> OS/runtime boundary and brokers tool access back to the host. See also the
 > [Security Guide](./security.md).
 
 **Characteristics**:
