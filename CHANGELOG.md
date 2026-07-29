@@ -3,6 +3,29 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.25.0]
+
+### Added
+
+- **Experimental Windows AppContainer backend** (`WindowsBackend`) — the Windows
+  analogue of the macOS Seatbelt backend. Launches the guest as a
+  capability-restricted, low-integrity AppContainer process inside a Job Object
+  (memory / active-process caps, whole-tree kill on close). With no capabilities
+  granted, the guest has no network and no access to the user's files; it reaches
+  the host only through the broker. Verified via the dedicated Windows isolation
+  CI. Install with the `isolation-windows` extra (pulls in `pywin32`).
+- **Pluggable broker transport.** The host↔guest broker channel is now an
+  abstraction with two implementations: a unix-domain socket on POSIX and a
+  **named pipe** on Windows (overlapped I/O; ACL grants `ALL APPLICATION
+  PACKAGES` at low integrity so an AppContainer guest can connect over local IPC,
+  not the network). The job payload carries both `endpoint` and `transport`.
+
+### Notes
+
+- The Windows backend is experimental and exercised only through Windows CI; its
+  capability set and output capture may still change. On non-Windows hosts it is
+  import-safe and reports `is_available() == False`.
+
 ## [0.24.0]
 
 ### Added

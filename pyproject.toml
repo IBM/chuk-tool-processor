@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chuk-tool-processor"
-version = "0.24.0"
+version = "0.25.0"
 description = "Async-native framework for registering, discovering, and executing tools referenced in LLM responses"
 readme = "README.md"
 requires-python = ">=3.11"
