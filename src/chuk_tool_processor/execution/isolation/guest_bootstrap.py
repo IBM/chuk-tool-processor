@@ -83,6 +83,11 @@ class _RpcClient:
     def start(self) -> None:
         self._reader_task = asyncio.create_task(self._read_loop())
 
+    def stop(self) -> None:
+        if self._reader_task is not None:
+            self._reader_task.cancel()
+            self._reader_task = None
+
     async def _read_loop(self) -> None:
         try:
             while True:
@@ -175,10 +180,14 @@ def _ov_read_exact(handle, n: int) -> bytes:
             buf = win32file.AllocateReadBuffer(want)
             try:
                 win32file.ReadFile(handle, buf, ov)
+                nread = win32file.GetOverlappedResult(handle, ov, True)
             except pywintypes.error as exc:
-                if exc.winerror != winerror.ERROR_IO_PENDING:
-                    raise
-            nread = win32file.GetOverlappedResult(handle, ov, True)
+                if exc.winerror == winerror.ERROR_IO_PENDING:
+                    nread = win32file.GetOverlappedResult(handle, ov, True)
+                else:
+                    # broken pipe / handle closed while a read was pending
+                    # (ERROR_OPERATION_ABORTED on shutdown) -> treat as EOF.
+                    raise ConnectionError(f"pipe read failed: {exc}") from exc
             if nread == 0:
                 raise ConnectionError("pipe closed")
             chunks.extend(memoryview(buf)[:nread])
@@ -293,20 +302,25 @@ async def _main(job: dict) -> int:
     await client.hello(job["token"])
     _dbg("hello ack; requesting list_tools")
 
-    tools = await client.request("list_tools", {})
-    _dbg(f"got {len(tools)} tools; running user code")
-    exec_globals: dict = dict(job.get("initial_vars") or {})
-    for meta in tools:
-        exec_globals[meta["name"]] = _build_tool_proxy(client, meta["name"], meta["namespace"])
-
     try:
+        tools = await client.request("list_tools", {})
+        _dbg(f"got {len(tools)} tools; running user code")
+        exec_globals: dict = dict(job.get("initial_vars") or {})
+        for meta in tools:
+            exec_globals[meta["name"]] = _build_tool_proxy(client, meta["name"], meta["namespace"])
+
         value = await _run_user_code(job["code"], exec_globals)
         await client.request("result", {"value": _jsonable(value)})
-        channel.close()
         return 0
     except Exception as exc:  # report guest exceptions as structured output
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         raise
+    finally:
+        # Always tear the channel down. On Windows the reader parks in a blocking
+        # overlapped ReadFile in an executor thread; closing the handle aborts it
+        # so the interpreter can exit instead of hanging on executor shutdown.
+        client.stop()
+        channel.close()
 
 
 def main(argv: list[str]) -> int:
