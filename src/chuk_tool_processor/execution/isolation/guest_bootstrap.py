@@ -154,42 +154,85 @@ class _StreamChannel:
             self._writer.close()
 
 
+def _ov_read_exact(handle, n: int) -> bytes:
+    """Read exactly ``n`` bytes with overlapped I/O.
+
+    The handle is opened overlapped so a pending read and a concurrent write don't
+    serialize (a synchronous handle deadlocks: the request write would block behind
+    the read that is waiting for that request's reply).
+    """
+    import pywintypes
+    import win32event
+    import win32file
+    import winerror
+
+    chunks = bytearray()
+    while len(chunks) < n:
+        want = n - len(chunks)
+        ov = pywintypes.OVERLAPPED()
+        ov.hEvent = win32event.CreateEvent(None, True, False, None)
+        try:
+            buf = win32file.AllocateReadBuffer(want)
+            try:
+                win32file.ReadFile(handle, buf, ov)
+            except pywintypes.error as exc:
+                if exc.winerror != winerror.ERROR_IO_PENDING:
+                    raise
+            nread = win32file.GetOverlappedResult(handle, ov, True)
+            if nread == 0:
+                raise ConnectionError("pipe closed")
+            chunks.extend(memoryview(buf)[:nread])
+        finally:
+            win32file.CloseHandle(ov.hEvent)
+    return bytes(chunks)
+
+
+def _ov_write_all(handle, data: bytes) -> None:
+    """Write all of ``data`` with overlapped I/O (see :func:`_ov_read_exact`)."""
+    import pywintypes
+    import win32event
+    import win32file
+    import winerror
+
+    ov = pywintypes.OVERLAPPED()
+    ov.hEvent = win32event.CreateEvent(None, True, False, None)
+    try:
+        try:
+            win32file.WriteFile(handle, data, ov)
+        except pywintypes.error as exc:
+            if exc.winerror != winerror.ERROR_IO_PENDING:
+                raise
+        win32file.GetOverlappedResult(handle, ov, True)
+    finally:
+        win32file.CloseHandle(ov.hEvent)
+
+
 class _PipeChannel:
     """Framed-JSON channel over a connected Windows named-pipe handle.
 
-    Uses blocking win32 ReadFile/WriteFile in the default executor — the asyncio
-    Proactor pipe transport drops frames after the first, so we mirror the host's
-    blocking approach instead.
+    Uses overlapped win32 ReadFile/WriteFile in the default executor. Overlapped
+    I/O is required: a synchronous handle serializes a pending read against a
+    concurrent write, which deadlocks the second request/reply round-trip. Writes
+    are serialized by a lock so concurrent tool calls don't interleave frames.
     """
 
     def __init__(self, handle):
         self._handle = handle
-
-    def _read_exact(self, n: int) -> bytes:
-        import win32file
-
-        chunks = bytearray()
-        while len(chunks) < n:
-            _hr, data = win32file.ReadFile(self._handle, n - len(chunks))
-            if not data:
-                raise ConnectionError("pipe closed")
-            chunks.extend(data)
-        return bytes(chunks)
+        self._write_lock = asyncio.Lock()
 
     def _recv_blocking(self) -> dict:
         import struct
 
-        (length,) = struct.unpack(">I", self._read_exact(4))
-        return json.loads(self._read_exact(length).decode("utf-8"))
+        (length,) = struct.unpack(">I", _ov_read_exact(self._handle, 4))
+        return json.loads(_ov_read_exact(self._handle, length).decode("utf-8"))
 
     async def recv(self) -> dict:
         return await asyncio.get_running_loop().run_in_executor(None, self._recv_blocking)
 
     async def send(self, obj: dict) -> None:
-        import win32file
-
         data = _wire.encode(obj)
-        await asyncio.get_running_loop().run_in_executor(None, win32file.WriteFile, self._handle, data)
+        async with self._write_lock:
+            await asyncio.get_running_loop().run_in_executor(None, _ov_write_all, self._handle, data)
 
     def close(self) -> None:
         with contextlib.suppress(Exception):
@@ -216,6 +259,7 @@ def _open_pipe_handle(name: str):
     import win32con
     import win32file
 
+    _FILE_FLAG_OVERLAPPED = 0x40000000
     last = None
     for _ in range(100):  # ~10s of retries
         try:
@@ -225,7 +269,7 @@ def _open_pipe_handle(name: str):
                 0,
                 None,
                 win32con.OPEN_EXISTING,
-                0,
+                _FILE_FLAG_OVERLAPPED,
                 None,
             )
         except pywintypes.error as exc:
