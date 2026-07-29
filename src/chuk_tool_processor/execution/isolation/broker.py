@@ -31,6 +31,15 @@ from chuk_tool_processor.registry.interface import ToolRegistryInterface
 logger = get_logger("chuk_tool_processor.execution.isolation.broker")
 
 
+def _dbg(msg: str) -> None:
+    import os
+
+    if os.environ.get("CTP_GUEST_DEBUG") == "1":
+        import sys
+
+        print(f"[host] {msg}", file=sys.stderr, flush=True)
+
+
 def _to_jsonable(obj: Any) -> Any:
     """Best-effort conversion of a tool result into JSON-serialisable data."""
     try:
@@ -133,6 +142,7 @@ class ToolBroker:
                     msg = await channel.recv()
                 except (EOFError, asyncio.IncompleteReadError, ConnectionError):
                     break
+                _dbg(f"recv {msg.get('method')} id={msg.get('id')}")
                 # Each request handled concurrently so guest asyncio.gather works.
                 asyncio.create_task(self._dispatch(msg, channel))
         except Exception as exc:  # noqa: BLE001 - broker must never crash the host
@@ -143,9 +153,11 @@ class ToolBroker:
     async def _dispatch(self, msg: dict[str, Any], channel: MessageChannel) -> None:
         method = msg.get("method")
         msg_id = msg.get("id")
+        _dbg(f"dispatch {method} id={msg_id}")
         try:
             if method == "list_tools":
                 await self._reply(channel, {"id": msg_id, "ok": True, "value": await self._list_tools()})
+                _dbg(f"replied {method} id={msg_id}")
             elif method == "call_tool":
                 value = await self._call_tool(msg.get("params") or {})
                 await self._reply(channel, {"id": msg_id, "ok": True, "value": value})
