@@ -133,6 +133,14 @@ omit = [
     "*/__main__.py",
     "*/sample_tools/*",
     "src/sample_tools/*",
+    # Isolation guest/Windows modules: exercised by the dedicated isolation CI
+    # (isolation.yml: Docker on Linux, AppContainer + named pipe on Windows), not
+    # the Linux unit-coverage run. The guest bootstrap runs in a separate
+    # process/container, so parent-process coverage never sees it on any platform.
+    "*/isolation/guest_bootstrap.py",
+    "*/isolation/_winpipe.py",
+    "*/isolation/_winproc.py",
+    "*/isolation/backends/windows.py",
 ]
 
 [tool.coverage.report]
@@ -153,6 +161,10 @@ precision = 2
 omit = [
     "*/sample_tools/*",
     "src/sample_tools/*",
+    "*/isolation/guest_bootstrap.py",
+    "*/isolation/_winpipe.py",
+    "*/isolation/_winproc.py",
+    "*/isolation/backends/windows.py",
 ]
 
 [tool.mypy]
