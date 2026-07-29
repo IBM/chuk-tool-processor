@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
 
-@dataclass
-class IsolatedResult:
+
+class IsolatedResult(BaseModel):
     """
     Outcome of running code through an :class:`IsolatedCodeRunner`.
 
@@ -29,6 +29,8 @@ class IsolatedResult:
         timed_out: True if the guest was killed for exceeding the wall timeout.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     ok: bool
     value: Any = None
     error: str | None = None
@@ -39,4 +41,4 @@ class IsolatedResult:
     duration: float = 0.0
     backend: str = ""
     timed_out: bool = False
-    meta: dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = Field(default_factory=dict)

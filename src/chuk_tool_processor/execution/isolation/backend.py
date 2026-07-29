@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from chuk_tool_processor.execution.isolation import _wire
 from chuk_tool_processor.execution.isolation.limits import IsolationLimits
 
 
@@ -48,17 +49,17 @@ class GuestJob:
         """
         lim = self.limits
         return {
-            "code": self.code,
-            "namespace": self.namespace,
-            "token": self.token,
-            "endpoint": endpoint,
-            "transport": transport,
-            "initial_vars": self.initial_vars,
-            "limits": {
-                "cpu_timeout": lim.cpu_timeout,
-                "memory_bytes": lim.memory_bytes,
-                "max_processes": lim.max_processes,
-                "max_output_bytes": lim.max_output_bytes,
+            _wire.KEY_CODE: self.code,
+            _wire.KEY_NAMESPACE: self.namespace,
+            _wire.KEY_TOKEN: self.token,
+            _wire.KEY_ENDPOINT: endpoint,
+            _wire.KEY_TRANSPORT: transport,
+            _wire.KEY_INITIAL_VARS: self.initial_vars,
+            _wire.KEY_LIMITS: {
+                _wire.KEY_CPU_TIMEOUT: lim.cpu_timeout,
+                _wire.KEY_MEMORY_BYTES: lim.memory_bytes,
+                _wire.KEY_MAX_PROCESSES: lim.max_processes,
+                _wire.KEY_MAX_OUTPUT_BYTES: lim.max_output_bytes,
             },
         }
 

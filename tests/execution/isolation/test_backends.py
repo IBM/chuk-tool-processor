@@ -72,6 +72,12 @@ class TestDockerArgv:
         # No "--network none" pairing when network is allowed.
         assert not ("--network" in argv and "none" in argv)
 
+    def test_pure_backend_properties(self):
+        b = DockerBackend()
+        assert isinstance(b.is_available(), bool)
+        assert b._python_exe() == "python"  # runs the container's interpreter
+        assert b._apply_rlimits_in_preexec() is False  # the container caps resources
+
 
 # --------------------------------------------------------------------------- #
 # Bubblewrap argv construction (pure; runs on any OS)

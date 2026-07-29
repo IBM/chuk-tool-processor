@@ -239,4 +239,4 @@ async def start_pipe_listener(handle_client: ClientHandler) -> BrokerListener:
     name = r"\\.\pipe\ctiso-" + uuid.uuid4().hex
     server = _PipeServer(name, handle_client, asyncio.get_running_loop())
     server.start()
-    return BrokerListener(endpoint=name, transport="pipe", _server=server, _cleanup=None)
+    return BrokerListener(endpoint=name, transport=_wire.TRANSPORT_PIPE, _server=server, _cleanup=None)

@@ -5,6 +5,31 @@ All notable changes to this project are documented here. This project follows
 
 ## [0.25.0]
 
+### Security
+
+- **Broker namespace policy is now authoritative.** The isolated guest runs
+  untrusted code and holds the broker token, so it can craft raw protocol frames.
+  `call_tool` previously let a guest-supplied namespace override the host's, so a
+  run pinned to one namespace could reach tools in another. The host namespace is
+  now enforced: a mismatching guest-supplied namespace is rejected, and tool
+  resolution is pinned to that namespace (no cross-namespace fuzzy fallback).
+- **Namespace-qualified allowlists.** `allowed_tools` entries may be bare
+  (`"name"`) or qualified (`"namespace.name"`); qualified entries pin a tool to a
+  single namespace so an allowed name can't select a same-named tool elsewhere.
+- **Brokered tool calls run through the canonical executor.** Instead of invoking
+  `tool.execute()` directly, the broker routes calls through the normal
+  `ToolExecutor` path, so sandboxed calls get the same wrappers, guards, and
+  observability as any other call. Callers may inject a fully-wrapped executor.
+- **Bounded broker lifecycle.** In-flight host tool calls are tracked and
+  cancelled when the run ends (`aclose`), and no tool calls are honoured once the
+  guest has reported its result — a departing or timed-out guest can no longer
+  leave privileged host work running.
+
+### Changed
+
+- `IsolationLimits` and `IsolatedResult` are now Pydantic models (frozen +
+  `extra="forbid"` for limits) with field-level validation, replacing dataclasses.
+
 ### Added
 
 - **Experimental Windows AppContainer backend** (`WindowsBackend`) — the Windows

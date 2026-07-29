@@ -10,7 +10,7 @@ see each backend for which limits it can enforce.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict, Field
 
 # Sensible defaults for running a short orchestration snippet.
 DEFAULT_WALL_TIMEOUT = 30.0
@@ -21,10 +21,14 @@ DEFAULT_MAX_TOOL_CALLS = 100
 DEFAULT_MAX_PROCESSES = 64
 
 
-@dataclass(frozen=True)
-class IsolationLimits:
+class IsolationLimits(BaseModel):
     """
     Resource ceilings for a single isolated execution.
+
+    Frozen and validated: field constraints reject non-positive limits at
+    construction (``pydantic.ValidationError`` is a ``ValueError``), and unknown
+    fields are refused so a typo in a security limit fails loudly rather than
+    being silently ignored.
 
     Attributes:
         wall_timeout: Hard wall-clock ceiling in seconds. The backend kills the
@@ -44,24 +48,12 @@ class IsolationLimits:
             only when the isolated code legitimately needs outbound network.
     """
 
-    wall_timeout: float = DEFAULT_WALL_TIMEOUT
-    cpu_timeout: float | None = DEFAULT_CPU_TIMEOUT
-    memory_bytes: int | None = DEFAULT_MEMORY_BYTES
-    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES
-    max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS
-    max_processes: int | None = DEFAULT_MAX_PROCESSES
-    allow_network: bool = False
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    def __post_init__(self) -> None:
-        if self.wall_timeout <= 0:
-            raise ValueError("wall_timeout must be positive")
-        if self.cpu_timeout is not None and self.cpu_timeout <= 0:
-            raise ValueError("cpu_timeout must be positive or None")
-        if self.memory_bytes is not None and self.memory_bytes <= 0:
-            raise ValueError("memory_bytes must be positive or None")
-        if self.max_output_bytes <= 0:
-            raise ValueError("max_output_bytes must be positive")
-        if self.max_tool_calls < 0:
-            raise ValueError("max_tool_calls must be >= 0")
-        if self.max_processes is not None and self.max_processes <= 0:
-            raise ValueError("max_processes must be positive or None")
+    wall_timeout: float = Field(default=DEFAULT_WALL_TIMEOUT, gt=0)
+    cpu_timeout: float | None = Field(default=DEFAULT_CPU_TIMEOUT, gt=0)
+    memory_bytes: int | None = Field(default=DEFAULT_MEMORY_BYTES, gt=0)
+    max_output_bytes: int = Field(default=DEFAULT_MAX_OUTPUT_BYTES, gt=0)
+    max_tool_calls: int = Field(default=DEFAULT_MAX_TOOL_CALLS, ge=0)
+    max_processes: int | None = Field(default=DEFAULT_MAX_PROCESSES, gt=0)
+    allow_network: bool = False

@@ -22,6 +22,7 @@ import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from chuk_tool_processor.execution.isolation import _wire
 from chuk_tool_processor.execution.isolation.backend import GuestJob, GuestOutcome
 from chuk_tool_processor.logging import get_logger
 
@@ -84,7 +85,9 @@ class SubprocessBackend:
 
     # -- main flow --------------------------------------------------------- #
 
-    async def run_guest(self, job: GuestJob, *, host_endpoint: str, transport: str = "unix") -> GuestOutcome:
+    async def run_guest(
+        self, job: GuestJob, *, host_endpoint: str, transport: str = _wire.TRANSPORT_UNIX
+    ) -> GuestOutcome:
         workdir = tempfile.mkdtemp(prefix="ctiso-")
         os.chmod(workdir, 0o700)
         try:

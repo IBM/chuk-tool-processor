@@ -74,7 +74,7 @@ ClientHandler = Callable[[MessageChannel], Awaitable[None]]
 
 def default_transport() -> str:
     """The transport kind for this platform: ``"pipe"`` on Windows, else ``"unix"``."""
-    return "pipe" if IS_WINDOWS else "unix"
+    return _wire.TRANSPORT_PIPE if IS_WINDOWS else _wire.TRANSPORT_UNIX
 
 
 @dataclass
@@ -122,7 +122,7 @@ async def _start_unix_listener(handle_client: ClientHandler) -> BrokerListener:
     os.chmod(path, 0o600)
     return BrokerListener(
         endpoint=path,
-        transport="unix",
+        transport=_wire.TRANSPORT_UNIX,
         _server=server,
         _cleanup=lambda: shutil.rmtree(sock_dir, ignore_errors=True),
     )

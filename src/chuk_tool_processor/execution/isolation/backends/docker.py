@@ -17,6 +17,7 @@ import contextlib
 import os
 import shutil
 
+from chuk_tool_processor.execution.isolation import _wire
 from chuk_tool_processor.execution.isolation.backend import GuestJob, GuestOutcome
 from chuk_tool_processor.execution.isolation.backends._subprocess import SubprocessBackend, _LaunchCtx
 
@@ -103,7 +104,9 @@ class DockerBackend(SubprocessBackend):
         ]
         return argv
 
-    async def run_guest(self, job: GuestJob, *, host_endpoint: str, transport: str = "unix") -> GuestOutcome:
+    async def run_guest(
+        self, job: GuestJob, *, host_endpoint: str, transport: str = _wire.TRANSPORT_UNIX
+    ) -> GuestOutcome:
         # Acquire the image up front (with the daemon's network) so the sandboxed
         # `docker run --network none --pull never` never has to reach a registry.
         pull_error = await self._ensure_image()

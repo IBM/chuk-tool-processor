@@ -21,9 +21,18 @@ import asyncio
 import contextlib
 import json
 import os
+import struct
 import sys
 
 import _wire  # sibling copy placed next to this file by the backend
+
+# Windows named-pipe connect retry budget (~10s) while the host pipe comes up.
+_PIPE_CONNECT_ATTEMPTS = 100
+_PIPE_CONNECT_DELAY_S = 0.1
+# CreateFile flag for overlapped (async) I/O — see _PipeChannel for why it matters.
+_FILE_FLAG_OVERLAPPED = 0x40000000
+# 4-byte big-endian length prefix, matching _wire's on-the-wire framing.
+_HEADER = struct.Struct(">I")
 
 
 def _apply_limits(limits: dict) -> None:
@@ -41,13 +50,13 @@ def _apply_limits(limits: dict) -> None:
         except (ValueError, OSError):
             pass
 
-    cpu = limits.get("cpu_timeout")
+    cpu = limits.get(_wire.KEY_CPU_TIMEOUT)
     if cpu:
         _set(resource.RLIMIT_CPU, int(cpu) + 1)
-    mem = limits.get("memory_bytes")
+    mem = limits.get(_wire.KEY_MEMORY_BYTES)
     if mem and hasattr(resource, "RLIMIT_AS"):
         _set(resource.RLIMIT_AS, int(mem))
-    procs = limits.get("max_processes")
+    procs = limits.get(_wire.KEY_MAX_PROCESSES)
     if procs and hasattr(resource, "RLIMIT_NPROC"):
         _set(resource.RLIMIT_NPROC, int(procs))
 
@@ -92,7 +101,7 @@ class _RpcClient:
         try:
             while True:
                 msg = await self._channel.recv()
-                fut = self._pending.pop(msg.get("id"), None)
+                fut = self._pending.pop(msg.get(_wire.KEY_ID), None)
                 if fut and not fut.done():
                     fut.set_result(msg)
         except (EOFError, asyncio.IncompleteReadError, ConnectionError, OSError):
@@ -103,25 +112,26 @@ class _RpcClient:
     async def _roundtrip(self, frame: dict):
         msg_id = self._next_id
         self._next_id += 1
-        frame["id"] = msg_id
+        frame[_wire.KEY_ID] = msg_id
         fut = asyncio.get_running_loop().create_future()
         self._pending[msg_id] = fut
         await self._channel.send(frame)
         reply = await fut
-        if not reply.get("ok"):
-            raise RuntimeError(reply.get("error") or "broker rejected request")
-        return reply.get("value")
+        if not reply.get(_wire.KEY_OK):
+            raise RuntimeError(reply.get(_wire.KEY_ERROR) or "broker rejected request")
+        return reply.get(_wire.KEY_VALUE)
 
     async def hello(self, token: str) -> None:
-        await self._roundtrip({"method": "hello", "token": token})
+        await self._roundtrip({_wire.KEY_METHOD: _wire.METHOD_HELLO, _wire.KEY_TOKEN: token})
 
     async def request(self, method: str, params: dict):
-        return await self._roundtrip({"method": method, "params": params})
+        return await self._roundtrip({_wire.KEY_METHOD: method, _wire.KEY_PARAMS: params})
 
 
 def _build_tool_proxy(client: _RpcClient, name: str, namespace: str):
     async def _proxy(**kwargs):
-        return await client.request("call_tool", {"name": name, "namespace": namespace, "arguments": kwargs})
+        params = {_wire.KEY_NAME: name, _wire.KEY_NAMESPACE: namespace, _wire.KEY_ARGUMENTS: kwargs}
+        return await client.request(_wire.METHOD_CALL_TOOL, params)
 
     _proxy.__name__ = name
     return _proxy
@@ -230,9 +240,7 @@ class _PipeChannel:
         self._write_lock = asyncio.Lock()
 
     def _recv_blocking(self) -> dict:
-        import struct
-
-        (length,) = struct.unpack(">I", _ov_read_exact(self._handle, 4))
+        (length,) = _HEADER.unpack(_ov_read_exact(self._handle, _HEADER.size))
         return json.loads(_ov_read_exact(self._handle, length).decode("utf-8"))
 
     async def recv(self) -> dict:
@@ -252,9 +260,9 @@ class _PipeChannel:
 
 async def _connect(job: dict):
     """Connect to the broker endpoint per the job's transport. Returns a channel."""
-    transport = job.get("transport", "unix")
-    endpoint = job.get("endpoint") or job.get("socket_path")
-    if transport == "pipe":
+    transport = job.get(_wire.KEY_TRANSPORT, _wire.TRANSPORT_UNIX)
+    endpoint = job.get(_wire.KEY_ENDPOINT)
+    if transport == _wire.TRANSPORT_PIPE:
         return _PipeChannel(_open_pipe_handle(endpoint))
     reader, writer = await asyncio.open_unix_connection(endpoint)
     return _StreamChannel(reader, writer)
@@ -268,9 +276,8 @@ def _open_pipe_handle(name: str):
     import win32con
     import win32file
 
-    _FILE_FLAG_OVERLAPPED = 0x40000000
     last = None
-    for _ in range(100):  # ~10s of retries
+    for _ in range(_PIPE_CONNECT_ATTEMPTS):
         try:
             return win32file.CreateFile(
                 name,
@@ -283,34 +290,35 @@ def _open_pipe_handle(name: str):
             )
         except pywintypes.error as exc:
             last = exc
-            time.sleep(0.1)
+            time.sleep(_PIPE_CONNECT_DELAY_S)
     raise ConnectionError(f"could not connect to pipe {name}: {last}")
 
 
 def _dbg(msg: str) -> None:
-    if os.environ.get("CTP_GUEST_DEBUG") == "1":
+    if os.environ.get(_wire.GUEST_DEBUG_ENV) == _wire.GUEST_DEBUG_ON:
         print(f"[guest] {msg}", file=sys.stderr, flush=True)
 
 
 async def _main(job: dict) -> int:
-    _dbg(f"connecting transport={job.get('transport')} endpoint={job.get('endpoint')}")
+    _dbg(f"connecting transport={job.get(_wire.KEY_TRANSPORT)} endpoint={job.get(_wire.KEY_ENDPOINT)}")
     channel = await _connect(job)
     _dbg("connected; starting rpc client")
     client = _RpcClient(channel)
     client.start()
     _dbg("sending hello")
-    await client.hello(job["token"])
+    await client.hello(job[_wire.KEY_TOKEN])
     _dbg("hello ack; requesting list_tools")
 
     try:
-        tools = await client.request("list_tools", {})
+        tools = await client.request(_wire.METHOD_LIST_TOOLS, {})
         _dbg(f"got {len(tools)} tools; running user code")
-        exec_globals: dict = dict(job.get("initial_vars") or {})
+        exec_globals: dict = dict(job.get(_wire.KEY_INITIAL_VARS) or {})
         for meta in tools:
-            exec_globals[meta["name"]] = _build_tool_proxy(client, meta["name"], meta["namespace"])
+            name, namespace = meta[_wire.KEY_NAME], meta[_wire.KEY_NAMESPACE]
+            exec_globals[name] = _build_tool_proxy(client, name, namespace)
 
-        value = await _run_user_code(job["code"], exec_globals)
-        await client.request("result", {"value": _jsonable(value)})
+        value = await _run_user_code(job[_wire.KEY_CODE], exec_globals)
+        await client.request(_wire.METHOD_RESULT, {_wire.KEY_VALUE: _jsonable(value)})
         return 0
     except Exception as exc:  # report guest exceptions as structured output
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
@@ -329,7 +337,7 @@ def main(argv: list[str]) -> int:
         return 2
     with open(argv[1], encoding="utf-8") as fh:
         job = json.load(fh)
-    _apply_limits(job.get("limits") or {})
+    _apply_limits(job.get(_wire.KEY_LIMITS) or {})
     try:
         return asyncio.run(_main(job))
     except Exception as exc:  # noqa: BLE001 - top-level guest failure

@@ -30,6 +30,7 @@ import sys
 import tempfile
 from typing import Any
 
+from chuk_tool_processor.execution.isolation import _wire
 from chuk_tool_processor.execution.isolation.backend import GuestJob, GuestOutcome
 from chuk_tool_processor.logging import get_logger
 
@@ -66,7 +67,9 @@ class WindowsBackend:
         except Exception:  # noqa: BLE001
             return False
 
-    async def run_guest(self, job: GuestJob, *, host_endpoint: str, transport: str = "pipe") -> GuestOutcome:
+    async def run_guest(
+        self, job: GuestJob, *, host_endpoint: str, transport: str = _wire.TRANSPORT_PIPE
+    ) -> GuestOutcome:
         # Deferred so this module imports cleanly on non-Windows.
         import asyncio
 

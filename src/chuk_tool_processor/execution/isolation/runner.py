@@ -16,6 +16,7 @@ import secrets
 import time
 from typing import Any
 
+from chuk_tool_processor.execution.isolation import _wire
 from chuk_tool_processor.execution.isolation.backend import (
     BackendUnavailableError,
     GuestJob,
@@ -103,7 +104,9 @@ class IsolatedCodeRunner:
                 initial_vars=initial_vars or {},
             )
             started = time.monotonic()
-            outcome = await self.backend.run_guest(job, host_endpoint=endpoint, transport=broker.transport or "unix")
+            outcome = await self.backend.run_guest(
+                job, host_endpoint=endpoint, transport=broker.transport or _wire.TRANSPORT_UNIX
+            )
             duration = time.monotonic() - started
             return self._assemble(outcome, broker, duration)
         finally:
