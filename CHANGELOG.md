@@ -3,6 +3,25 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.26.0]
+
+### Security
+
+- **MCP tool-name shadowing fixed.** When multiple MCP servers advertised the
+  same tool name, `StreamManager` used last-writer-wins with no warning, so a
+  later server (malicious, compromised, or merely reusing a common name like
+  `read_file`) silently captured every future unpinned `call_tool` for that name.
+  Registration is now **first-wins**: the first server to advertise a name owns
+  default routing, a colliding later server is ignored for routing and logged
+  with a prominent warning, and the shadowed tool remains reachable only by
+  passing `server_name=` explicitly.
+
+### Added
+
+- `StreamManager.get_servers_for_tool(name)` and
+  `StreamManager.get_tool_collisions()` to inspect which servers advertise a tool
+  name and surface cross-server name collisions.
+
 ## [0.25.0]
 
 ### Security

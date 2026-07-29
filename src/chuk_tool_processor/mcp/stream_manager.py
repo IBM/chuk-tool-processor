@@ -71,7 +71,13 @@ class StreamManager:
     ) -> None:
         self.transports: dict[str, MCPBaseTransport] = {}
         self.server_info: list[ServerInfo] = []
+        # Default routing map (tool name -> server). First server to advertise a
+        # name owns it; see _register_tools for the first-wins collision policy.
         self.tool_to_server_map: dict[str, str] = {}
+        # Every server that advertised each tool name, in registration order.
+        # Lets callers detect/resolve name collisions instead of silently
+        # inheriting whichever server registered last.
+        self.tool_to_servers: dict[str, list[str]] = {}
         self.server_names: dict[int, str] = {}
         self.all_tools: list[MCPToolDefinition] = []
         self._lock = asyncio.Lock()
@@ -334,9 +340,7 @@ class StreamManager:
                     raw_tools = await asyncio.wait_for(transport.get_tools(), timeout=self.timeout_config.operation)
                     tools = [MCPToolDefinition.model_validate(t) for t in raw_tools]
 
-                    for t in tools:
-                        if t.name:
-                            self.tool_to_server_map[t.name] = server_name
+                    self._register_tools(tools, server_name)
                     self.all_tools.extend(tools)
 
                     self.server_info.append(ServerInfo(id=idx, name=server_name, tools=len(tools), status=status))
@@ -413,9 +417,7 @@ class StreamManager:
                     raw_tools = await asyncio.wait_for(transport.get_tools(), timeout=self.timeout_config.operation)
                     tools = [MCPToolDefinition.model_validate(t) for t in raw_tools]
 
-                    for t in tools:
-                        if t.name:
-                            self.tool_to_server_map[t.name] = name
+                    self._register_tools(tools, name)
                     self.all_tools.extend(tools)
 
                     self.server_info.append(ServerInfo(id=idx, name=name, tools=len(tools), status=status))
@@ -489,9 +491,7 @@ class StreamManager:
                     raw_tools = await asyncio.wait_for(transport.get_tools(), timeout=self.timeout_config.operation)
                     tools = [MCPToolDefinition.model_validate(t) for t in raw_tools]
 
-                    for t in tools:
-                        if t.name:
-                            self.tool_to_server_map[t.name] = name
+                    self._register_tools(tools, name)
                     self.all_tools.extend(tools)
 
                     self.server_info.append(ServerInfo(id=idx, name=name, tools=len(tools), status=status))
@@ -575,9 +575,7 @@ class StreamManager:
                     raw_tools = await asyncio.wait_for(transport.get_tools(), timeout=self.timeout_config.operation)
                     tools = [MCPToolDefinition.model_validate(t) for t in raw_tools]
 
-                    for t in tools:
-                        if t.name:
-                            self.tool_to_server_map[t.name] = name
+                    self._register_tools(tools, name)
                     self.all_tools.extend(tools)
 
                     self.server_info.append(ServerInfo(id=idx, name=name, tools=len(tools), status=status))
@@ -599,8 +597,57 @@ class StreamManager:
     def get_all_tools(self) -> list[dict[str, Any]]:
         return [t.model_dump() for t in self.all_tools]
 
+    def _register_tools(self, tools: list[MCPToolDefinition], server_name: str) -> None:
+        """Map tool names to their owning server using a first-wins policy.
+
+        The first server to advertise a given tool name owns it for default
+        (unpinned) routing. If a later server advertises the same name, we keep
+        the original owner and log a prominent warning rather than silently
+        rerouting every future call to the newcomer — a bare tool name is not a
+        trust boundary, so a second server (malicious, compromised, or merely
+        reusing a common name like ``read_file``) must not be able to hijack a
+        name an earlier, trusted server already provides. Callers can still reach
+        the shadowed tool deliberately via ``call_tool(name, server_name=...)``.
+        """
+        for t in tools:
+            if not t.name:
+                continue
+            providers = self.tool_to_servers.setdefault(t.name, [])
+            if server_name not in providers:
+                providers.append(server_name)
+            owner = self.tool_to_server_map.get(t.name)
+            if owner is None:
+                self.tool_to_server_map[t.name] = server_name
+            elif owner != server_name:
+                logger.warning(
+                    "MCP tool name collision: '%s' is already provided by server '%s'; "
+                    "ignoring the tool of the same name from server '%s' for default routing. "
+                    "Call it explicitly with server_name='%s' if you meant that server.",
+                    t.name,
+                    owner,
+                    server_name,
+                    server_name,
+                )
+
     def get_server_for_tool(self, tool_name: str) -> str | None:
         return self.tool_to_server_map.get(tool_name)
+
+    def get_servers_for_tool(self, tool_name: str) -> list[str]:
+        """All servers that advertised ``tool_name``, in registration order.
+
+        More than one entry means the name is shadowed; only the first owns
+        default routing (see :meth:`_register_tools`).
+        """
+        return list(self.tool_to_servers.get(tool_name, []))
+
+    def get_tool_collisions(self) -> dict[str, list[str]]:
+        """Tool names advertised by more than one server, mapped to those servers.
+
+        Empty when there are no collisions. The first server in each list is the
+        one that receives unpinned calls; the rest are reachable only by passing
+        ``server_name`` explicitly to :meth:`call_tool`.
+        """
+        return {name: list(servers) for name, servers in self.tool_to_servers.items() if len(servers) > 1}
 
     def get_server_info(self) -> list[dict[str, Any]]:
         return [s.model_dump() for s in self.server_info]
@@ -1045,6 +1092,7 @@ class StreamManager:
             self.transports.clear()
             self.server_info.clear()
             self.tool_to_server_map.clear()
+            self.tool_to_servers.clear()
             self.all_tools.clear()
             self.server_names.clear()
         except Exception as e:

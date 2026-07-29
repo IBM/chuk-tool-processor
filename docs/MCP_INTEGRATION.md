@@ -198,6 +198,37 @@ processor, manager = await setup_mcp_sse(
 
 ---
 
+## Tool Name Collisions
+
+When you connect several MCP servers, two of them can advertise the **same tool
+name** (common short names like `read_file`, `search`, `query` collide easily). A
+bare tool name is not a trust boundary, so `StreamManager` uses a **first-wins**
+policy: the first server to advertise a name owns it for default (unpinned)
+routing, and a later server advertising the same name is **ignored for routing
+and logged with a warning** — it can never silently take over calls that were
+going to an already-connected server.
+
+```python
+sm = StreamManager()
+await sm.initialize(servers=[...])   # trusted-fs, then community-server
+
+# trusted-fs registered read_file first, so it owns the name:
+await sm.call_tool("read_file", {"path": "..."})            # -> trusted-fs
+# reach the shadowed copy deliberately by pinning the server:
+await sm.call_tool("read_file", {"path": "..."}, server_name="community-server")
+```
+
+Inspect collisions so you can namespace or reconfigure:
+
+```python
+sm.get_server_for_tool("read_file")    # "trusted-fs"  (owns default routing)
+sm.get_servers_for_tool("read_file")   # ["trusted-fs", "community-server"]
+sm.get_tool_collisions()               # {"read_file": ["trusted-fs", "community-server"]}
+```
+
+To avoid collisions entirely, give each server a distinct `namespace=` in the
+`setup_mcp_*` wrappers (e.g. `notion.search`, `db.query`) so names never clash.
+
 ## Middleware Stack
 
 The `MiddlewareStack` provides production-grade resilience for MCP tool calls. It wraps MCP connections with configurable retry, circuit breaker, and rate limiting layers.
