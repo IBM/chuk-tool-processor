@@ -116,12 +116,20 @@ class _PipeServer:
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="ctiso-pipe", daemon=True)
         self._first = True
+        # Build the AppContainer-accessible security descriptor once. If that
+        # fails, fall back to the default SD so the pipe still comes up — the
+        # local (non-AppContainer) guest connects as the current user regardless;
+        # only the AppContainer backend needs the custom grant.
+        try:
+            self._sa: Any = _pipe_security_attributes()
+        except Exception:  # noqa: BLE001
+            self._sa = None
 
     def start(self) -> None:
         self._thread.start()
 
     def _make_instance(self) -> Any:
-        sa = _pipe_security_attributes()
+        sa = self._sa
         open_mode = win32con.PIPE_ACCESS_DUPLEX
         if self._first:
             open_mode |= win32con.FILE_FLAG_FIRST_PIPE_INSTANCE

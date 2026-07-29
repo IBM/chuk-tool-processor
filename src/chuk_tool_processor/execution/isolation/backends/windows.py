@@ -92,6 +92,11 @@ class WindowsBackend:
 
             # Let the AppContainer read the staging dir and write its output there.
             self._grant_app_packages(workdir)
+            # ...and read the interpreter (venv + base install) so Python can
+            # start (it must read pyvenv.cfg + the stdlib). NB: this modifies the
+            # interpreter dir's ACL persistently — fine for CI/throwaway envs.
+            for prefix in {os.path.realpath(sys.base_prefix), os.path.realpath(sys.prefix)}:
+                self._grant_read(prefix)
 
             sid = self._create_app_container(container_name)
             timed_out, exit_code = self._launch(job, workdir, sid, stdout_path, stderr_path)
@@ -111,6 +116,14 @@ class WindowsBackend:
         # icacls is the pragmatic way to add an inheritable ACE for AppContainers.
         subprocess.run(
             ["icacls", path, "/grant", f"{_ALL_APP_PACKAGES}:(OI)(CI)(F)", "/T", "/Q"],
+            capture_output=True,
+            check=False,
+        )
+
+    def _grant_read(self, path: str) -> None:
+        # Read+execute (not full) for read-only trees like the interpreter.
+        subprocess.run(
+            ["icacls", path, "/grant", f"{_ALL_APP_PACKAGES}:(OI)(CI)(RX)", "/T", "/Q"],
             capture_output=True,
             check=False,
         )

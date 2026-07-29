@@ -168,7 +168,9 @@ class TestWindowsIntegration:
 # Integration (gated) — Docker
 # --------------------------------------------------------------------------- #
 def _docker_up() -> bool:
-    if shutil.which("docker") is None:
+    # DockerBackend targets a Linux Docker host (Linux container + bind-mounted
+    # unix socket); a Windows-container daemon can't run the linux python image.
+    if not sys.platform.startswith("linux") or shutil.which("docker") is None:
         return False
     try:
         return subprocess.run(["docker", "info"], capture_output=True, timeout=10).returncode == 0
@@ -178,7 +180,7 @@ def _docker_up() -> bool:
 
 @pytest.mark.skipif(
     not (_RUN_INTEGRATION and _docker_up()),
-    reason="set CTP_TEST_ISOLATION_INTEGRATION=1 with a running Docker daemon",
+    reason="set CTP_TEST_ISOLATION_INTEGRATION=1 on Linux with a running Docker daemon",
 )
 class TestDockerIntegration:
     @pytest.mark.asyncio
