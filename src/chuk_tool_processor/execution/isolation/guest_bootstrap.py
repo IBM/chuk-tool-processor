@@ -18,6 +18,7 @@ Usage: python guest_bootstrap.py <job.json>
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import sys
@@ -73,9 +74,8 @@ def _jsonable(obj):
 class _RpcClient:
     """Multiplexes request/response frames over the broker socket by message id."""
 
-    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        self._reader = reader
-        self._writer = writer
+    def __init__(self, channel):
+        self._channel = channel
         self._next_id = 0
         self._pending: dict[int, asyncio.Future] = {}
         self._reader_task: asyncio.Task | None = None
@@ -86,11 +86,11 @@ class _RpcClient:
     async def _read_loop(self) -> None:
         try:
             while True:
-                msg = await _wire.recv(self._reader)
+                msg = await self._channel.recv()
                 fut = self._pending.pop(msg.get("id"), None)
                 if fut and not fut.done():
                     fut.set_result(msg)
-        except (EOFError, asyncio.IncompleteReadError):
+        except (EOFError, asyncio.IncompleteReadError, ConnectionError, OSError):
             for fut in self._pending.values():
                 if not fut.done():
                     fut.set_exception(ConnectionError("broker closed the connection"))
@@ -101,7 +101,7 @@ class _RpcClient:
         frame["id"] = msg_id
         fut = asyncio.get_running_loop().create_future()
         self._pending[msg_id] = fut
-        await _wire.send(self._writer, frame)
+        await self._channel.send(frame)
         reply = await fut
         if not reply.get("ok"):
             raise RuntimeError(reply.get("error") or "broker rejected request")
@@ -136,32 +136,102 @@ async def _run_user_code(code: str, exec_globals: dict):
     return local_scope.get("__result__")
 
 
+class _StreamChannel:
+    """Framed-JSON channel over an asyncio (reader, writer) pair (unix socket)."""
+
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        self._reader = reader
+        self._writer = writer
+
+    async def recv(self) -> dict:
+        return await _wire.recv(self._reader)
+
+    async def send(self, obj: dict) -> None:
+        await _wire.send(self._writer, obj)
+
+    def close(self) -> None:
+        with contextlib.suppress(Exception):
+            self._writer.close()
+
+
+class _PipeChannel:
+    """Framed-JSON channel over a connected Windows named-pipe handle.
+
+    Uses blocking win32 ReadFile/WriteFile in the default executor — the asyncio
+    Proactor pipe transport drops frames after the first, so we mirror the host's
+    blocking approach instead.
+    """
+
+    def __init__(self, handle):
+        self._handle = handle
+
+    def _read_exact(self, n: int) -> bytes:
+        import win32file
+
+        chunks = bytearray()
+        while len(chunks) < n:
+            _hr, data = win32file.ReadFile(self._handle, n - len(chunks))
+            if not data:
+                raise ConnectionError("pipe closed")
+            chunks.extend(data)
+        return bytes(chunks)
+
+    def _recv_blocking(self) -> dict:
+        import struct
+
+        (length,) = struct.unpack(">I", self._read_exact(4))
+        return json.loads(self._read_exact(length).decode("utf-8"))
+
+    async def recv(self) -> dict:
+        return await asyncio.get_running_loop().run_in_executor(None, self._recv_blocking)
+
+    async def send(self, obj: dict) -> None:
+        import win32file
+
+        data = _wire.encode(obj)
+        await asyncio.get_running_loop().run_in_executor(None, win32file.WriteFile, self._handle, data)
+
+    def close(self) -> None:
+        with contextlib.suppress(Exception):
+            import win32file
+
+            win32file.CloseHandle(self._handle)
+
+
 async def _connect(job: dict):
-    """Connect to the broker endpoint per the job's transport."""
+    """Connect to the broker endpoint per the job's transport. Returns a channel."""
     transport = job.get("transport", "unix")
     endpoint = job.get("endpoint") or job.get("socket_path")
     if transport == "pipe":
-        return await _open_pipe(endpoint)
-    return await asyncio.open_unix_connection(endpoint)
+        return _PipeChannel(_open_pipe_handle(endpoint))
+    reader, writer = await asyncio.open_unix_connection(endpoint)
+    return _StreamChannel(reader, writer)
 
 
-async def _open_pipe(name: str):
-    """Windows named-pipe client -> (StreamReader, StreamWriter). Retries while busy."""
+def _open_pipe_handle(name: str):
+    """Open the named pipe (blocking) with retries while it's not yet listening/busy."""
     import time
 
-    loop = asyncio.get_running_loop()
+    import pywintypes
+    import win32con
+    import win32file
+
     last = None
-    for _ in range(50):  # ~5s of retries for pipe-busy / not-yet-listening
+    for _ in range(100):  # ~10s of retries
         try:
-            reader = asyncio.StreamReader()
-            protocol = asyncio.StreamReaderProtocol(reader)
-            transport, _proto = await loop.create_pipe_connection(lambda p=protocol: p, name)  # type: ignore[attr-defined]  # noqa: B023
-            writer = asyncio.StreamWriter(transport, protocol, reader, loop)
-            return reader, writer
-        except (FileNotFoundError, OSError) as exc:  # pipe not ready / all instances busy
+            return win32file.CreateFile(
+                name,
+                win32con.GENERIC_READ | win32con.GENERIC_WRITE,
+                0,
+                None,
+                win32con.OPEN_EXISTING,
+                0,
+                None,
+            )
+        except pywintypes.error as exc:
             last = exc
             time.sleep(0.1)
-    raise last or ConnectionError(f"could not connect to pipe {name}")
+    raise ConnectionError(f"could not connect to pipe {name}: {last}")
 
 
 def _dbg(msg: str) -> None:
@@ -171,9 +241,9 @@ def _dbg(msg: str) -> None:
 
 async def _main(job: dict) -> int:
     _dbg(f"connecting transport={job.get('transport')} endpoint={job.get('endpoint')}")
-    reader, writer = await _connect(job)
+    channel = await _connect(job)
     _dbg("connected; starting rpc client")
-    client = _RpcClient(reader, writer)
+    client = _RpcClient(channel)
     client.start()
     _dbg("sending hello")
     await client.hello(job["token"])
@@ -188,7 +258,7 @@ async def _main(job: dict) -> int:
     try:
         value = await _run_user_code(job["code"], exec_globals)
         await client.request("result", {"value": _jsonable(value)})
-        writer.close()
+        channel.close()
         return 0
     except Exception as exc:  # report guest exceptions as structured output
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
