@@ -81,10 +81,18 @@ non-isolating backend unless you pass `allow_no_isolation=True`.
 
 | Backend | Isolation | Platform | Needs | Notes |
 |---|---|---|---|---|
-| `DockerBackend` | Strong | any w/ Docker/Podman | `docker` CLI + daemon | throwaway container, `--network none`, read-only root, dropped caps |
+| `DockerBackend` | Strong§ | Linux Docker host | `docker`/`podman` CLI + daemon | throwaway container, `--network none`, read-only root, dropped caps, runs as host uid |
 | `SeatbeltBackend` | Strong* | macOS | `sandbox-exec` (built in) | no inet, no fs-writes outside work/tmp, secret dirs unreadable |
 | `BubblewrapBackend` | Strong | Linux | `bwrap` binary | user/mount/pid/net namespaces |
 | `LocalProcessBackend` | **None** | any | — | dev/testing only; runner refuses it without `allow_no_isolation=True` |
+
+§ `DockerBackend` runs each guest in a throwaway `docker run --rm` container
+(pre-pulled image + `--pull never`, `--network none`, read-only root, `--cap-drop
+ALL`, memory/pids limits) **as the host uid**, and is CI-verified end-to-end on
+native Linux. The host↔guest broker uses a bind-mounted unix socket, which the
+VM-based file sharing in **Docker Desktop / podman-machine (macOS, Windows)**
+does not support (`connect()` returns `ENOTSUP`) — run it on a native Linux
+Docker host (servers, CI, WSL2).
 
 \* Seatbelt reliably blocks network and filesystem *writes*; read confinement is
 best-effort (broad reads with known secret dirs denied) because a strict read

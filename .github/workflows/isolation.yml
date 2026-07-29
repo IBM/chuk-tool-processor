@@ -1,0 +1,37 @@
+name: Isolation integration
+
+# Runs the isolation backend integration tests (opt-in) against real runtimes.
+# The default matrix (test.yml) only covers the pure/unit tests; this job spins
+# up real Docker containers so the DockerBackend is verified end-to-end.
+
+on:
+  push:
+    branches: [main, develop, "feat/**"]
+    paths:
+      - "src/chuk_tool_processor/execution/isolation/**"
+      - "tests/execution/isolation/**"
+      - ".github/workflows/isolation.yml"
+  pull_request:
+    paths:
+      - "src/chuk_tool_processor/execution/isolation/**"
+      - "tests/execution/isolation/**"
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      # Opt in to the backend integration tests (real Docker daemon on ubuntu).
+      CTP_TEST_ISOLATION_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv python install 3.12
+      - run: uv sync --dev
+      - name: Install bubblewrap (Linux namespace backend)
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Isolation tests (Docker + bubblewrap integration enabled)
+        run: uv run pytest tests/execution/isolation/ -v -o addopts=""
