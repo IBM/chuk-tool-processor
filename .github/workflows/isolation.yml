@@ -31,7 +31,9 @@ jobs:
           cache-dependency-glob: "uv.lock"
       - run: uv python install 3.12
       - run: uv sync --dev
-      - name: Install bubblewrap (Linux namespace backend)
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
-      - name: Isolation tests (Docker + bubblewrap integration enabled)
+      # NB: bubblewrap is intentionally NOT installed here — GitHub runners block
+      # the netlink call bwrap uses to bring up loopback in a new net namespace
+      # ("RTM_NEWADDR: Operation not permitted"), so its integration test can't
+      # run here. It requires a real Linux host with unprivileged user namespaces.
+      - name: Isolation tests (Docker integration enabled)
         run: uv run pytest tests/execution/isolation/ -v -o addopts=""
