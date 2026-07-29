@@ -1,12 +1,30 @@
 # CHUK Tool Processor — Roadmap
 
-> Last updated: 2026-02-21
+> Last updated: 2026-07-29
 
 ---
 
-## Shipped (v0.22)
+## Shipped (through v0.25)
 
 Everything below is production-ready on `main`.
+
+### Isolated Execution & Security (v0.23–v0.25)
+- [x] **Fail-closed `CodeSandbox`** (v0.23) — the in-process `exec()` sandbox no
+      longer pretends restricted builtins are a security boundary; it refuses to
+      run untrusted code unless `allow_unsafe_execution=True` and is documented
+      as trusted-code-only
+- [x] **`IsolatedCodeRunner`** (v0.24) — runs untrusted / LLM-generated code
+      behind a real OS/runtime boundary, with tool access brokered back to the
+      host over a single audited JSON channel (never pickle)
+- [x] Isolation backends behind one protocol — `SeatbeltBackend` (macOS),
+      `DockerBackend` (throwaway container), `BubblewrapBackend` (Linux
+      namespaces), `LocalProcessBackend` (dev/testing; refused without opt-in)
+- [x] **Experimental Windows AppContainer backend** + pluggable broker transport
+      (unix socket / Windows named pipe) (v0.25)
+- [x] **Broker policy hardening** (v0.25) — host-authoritative namespace,
+      namespace-qualified allowlists, calls routed through the canonical executor,
+      and bounded lifecycle (in-flight calls cancelled on close; none honoured
+      after the run's result)
 
 ### Core Runtime
 - [x] Async-native tool execution (Python 3.11+)
@@ -96,7 +114,7 @@ Comprehensive audit and fix of architecture principle violations:
 
 ---
 
-## Next — Features (v0.23)
+## Next — Features
 
 ### Guard Integration with Processor
 Guards are already built as a standalone `GuardChain` system with pre/post-execution hooks. The integration into the processor pipeline should be clean since the API was designed for exactly this wiring.

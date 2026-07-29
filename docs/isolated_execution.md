@@ -82,7 +82,7 @@ non-isolating backend unless you pass `allow_no_isolation=True`.
 | Backend | Isolation | Platform | Needs | Notes |
 |---|---|---|---|---|
 | `DockerBackend` | Strong§ | Linux Docker host | `docker`/`podman` CLI + daemon | throwaway container, `--network none`, read-only root, dropped caps, runs as host uid |
-| `SeatbeltBackend` | Strong* | macOS | `sandbox-exec` (built in) | no inet, no fs-writes outside work/tmp, secret dirs unreadable |
+| `SeatbeltBackend` | Net + write* | macOS | `sandbox-exec` (built in) | blocks network and fs-writes outside work/tmp; reads are broad with a secret-dir denylist |
 | `BubblewrapBackend` | Strong¶ | Linux | `bwrap` binary | user/mount/pid/net namespaces |
 | `WindowsBackend` | Strong‡ | Windows | `pywin32` | AppContainer + Job Object (+ low integrity) |
 | `LocalProcessBackend` | **None** | any | — | dev/testing only; runner refuses it without `allow_no_isolation=True` |
@@ -100,11 +100,15 @@ enabled. It is not exercised in GitHub CI because the runners block the netlink
 call `bwrap` uses to bring up loopback in a fresh network namespace
 (`RTM_NEWADDR: Operation not permitted`); verify it on a real Linux host.
 
-\* Seatbelt reliably blocks network and filesystem *writes*; read confinement is
-best-effort (broad reads with known secret dirs denied) because a strict read
-allowlist aborts CPython. The denied secret paths are configurable —
+\* Seatbelt is **network and write confinement with partial read protection**,
+not full isolation: it reliably blocks network and filesystem *writes*, but read
+confinement is best-effort (broad reads with known secret dirs denied) because a
+strict read allowlist aborts CPython. The denied secret paths are configurable —
 `SeatbeltBackend(deny_read_paths=..., add_deny_read_paths=...)` — defaulting to
-`DEFAULT_DENY_READ_PATHS` (`~/.ssh`, `~/.aws`, cloud creds, keychains, …).
+`DEFAULT_DENY_READ_PATHS` (`~/.ssh`, `~/.aws`, cloud creds, keychains, …). Note
+that `sandbox-exec` is officially deprecated by Apple (still present and
+functional on current macOS); prefer `DockerBackend` where you need a stronger,
+non-deprecated boundary.
 `sandbox-exec` is deprecated by Apple but functional.
 
 ‡ `WindowsBackend` is **experimental** — the AppContainer + Job Object launch and
