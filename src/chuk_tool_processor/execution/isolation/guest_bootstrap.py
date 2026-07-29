@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 
 import _wire  # sibling copy placed next to this file by the backend
@@ -163,13 +164,23 @@ async def _open_pipe(name: str):
     raise last or ConnectionError(f"could not connect to pipe {name}")
 
 
+def _dbg(msg: str) -> None:
+    if os.environ.get("CTP_GUEST_DEBUG") == "1":
+        print(f"[guest] {msg}", file=sys.stderr, flush=True)
+
+
 async def _main(job: dict) -> int:
+    _dbg(f"connecting transport={job.get('transport')} endpoint={job.get('endpoint')}")
     reader, writer = await _connect(job)
+    _dbg("connected; starting rpc client")
     client = _RpcClient(reader, writer)
     client.start()
+    _dbg("sending hello")
     await client.hello(job["token"])
+    _dbg("hello ack; requesting list_tools")
 
     tools = await client.request("list_tools", {})
+    _dbg(f"got {len(tools)} tools; running user code")
     exec_globals: dict = dict(job.get("initial_vars") or {})
     for meta in tools:
         exec_globals[meta["name"]] = _build_tool_proxy(client, meta["name"], meta["namespace"])

@@ -32,6 +32,7 @@ jobs:
       # effect where its runtime is present; harmless elsewhere.
       CTP_TEST_ISOLATION_INTEGRATION: "1"
       CTP_TEST_ISOLATION_WINDOWS: "1"
+      CTP_GUEST_DEBUG: "1"  # guest prints connection checkpoints to stderr
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
