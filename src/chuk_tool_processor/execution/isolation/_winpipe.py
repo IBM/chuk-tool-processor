@@ -41,6 +41,10 @@ from chuk_tool_processor.execution.isolation.transport import BrokerListener, Cl
 _LEN = struct.Struct(">I")
 _BUF = 65536
 
+# Win32 constants (not reliably exposed by win32con across pywin32 versions).
+_PIPE_ACCESS_DUPLEX = 0x00000003
+_FILE_FLAG_FIRST_PIPE_INSTANCE = 0x00080000
+
 
 def _pipe_security_attributes() -> Any:
     """SECURITY_ATTRIBUTES granting the user + ALL APPLICATION PACKAGES at low IL."""
@@ -130,9 +134,9 @@ class _PipeServer:
 
     def _make_instance(self) -> Any:
         sa = self._sa
-        open_mode = win32con.PIPE_ACCESS_DUPLEX
+        open_mode = _PIPE_ACCESS_DUPLEX
         if self._first:
-            open_mode |= win32con.FILE_FLAG_FIRST_PIPE_INSTANCE
+            open_mode |= _FILE_FLAG_FIRST_PIPE_INSTANCE
             self._first = False
         pipe_mode = win32pipe.PIPE_TYPE_BYTE | win32pipe.PIPE_READMODE_BYTE | win32pipe.PIPE_WAIT
         pipe_mode |= getattr(win32pipe, "PIPE_REJECT_REMOTE_CLIENTS", 0)
