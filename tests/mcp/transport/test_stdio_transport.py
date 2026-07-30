@@ -53,6 +53,9 @@ class TestStdioTransport:
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client", return_value=mock_context),
             patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", AsyncMock(return_value=True)),
+            # initialize() follows up with a liveness ping; mock it too (the
+            # Rust-backed send_ping type-checks its streams and rejects Mocks).
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", AsyncMock(return_value=True)),
         ):
             mock_context.__aenter__.return_value = mock_streams
 

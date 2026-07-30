@@ -22,6 +22,7 @@ from chuk_mcp.protocol.messages import (  # type: ignore[import-untyped]
 from chuk_mcp.transports.stdio import stdio_client  # type: ignore[import-untyped]
 from chuk_mcp.transports.stdio.parameters import StdioParameters  # type: ignore[import-untyped]
 
+from ._result_normalize import to_plain_dict
 from .base_transport import MCPBaseTransport
 
 logger = logging.getLogger(__name__)
@@ -392,13 +393,9 @@ class StdioTransport(MCPBaseTransport):
             # Normalize response - handle multiple formats including Pydantic models
             # 1. Check if it's a Pydantic model with tools attribute (e.g., ListToolsResult from chuk_mcp)
             if hasattr(response, "tools"):
-                tools = response.tools
-                # Convert Pydantic Tool models to dicts if needed
-                if tools and len(tools) > 0 and hasattr(tools[0], "model_dump"):
-                    tools = [tool.model_dump() if hasattr(tool, "model_dump") else tool for tool in tools]
-                elif tools and len(tools) > 0 and hasattr(tools[0], "dict"):
-                    # Older Pydantic versions use dict() instead of model_dump()
-                    tools = [tool.dict() if hasattr(tool, "dict") else tool for tool in tools]
+                # Tool entries may be Pydantic models (model_dump/dict) or the
+                # Rust-backed chuk-mcp's PyO3 objects (to_dict); normalise both.
+                tools = [to_plain_dict(tool) for tool in response.tools]
             # 2. Check if it's a Pydantic model that can be dumped
             elif hasattr(response, "model_dump"):
                 dumped = response.model_dump()
@@ -542,6 +539,10 @@ class StdioTransport(MCPBaseTransport):
         STDIO preserves string representations of numeric values for
         backward compatibility with existing tests.
         """
+        # Rust-backed chuk-mcp returns a ToolResult object (with to_dict), not a
+        # dict; normalise it before the dict-oriented handling below.
+        response = to_plain_dict(response)
+
         # Handle explicit error in response
         if "error" in response:
             error_info = response["error"]
@@ -604,9 +605,8 @@ class StdioTransport(MCPBaseTransport):
             if isinstance(response, dict):
                 return response
             # send_* helpers return a pydantic *Result model; normalize to a dict
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("List resources timed out")
             self._consecutive_failures += 1
@@ -626,9 +626,8 @@ class StdioTransport(MCPBaseTransport):
             if isinstance(response, dict):
                 return response
             # send_* helpers return a pydantic *Result model; normalize to a dict
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("List prompts timed out")
             self._consecutive_failures += 1
@@ -648,9 +647,8 @@ class StdioTransport(MCPBaseTransport):
             if isinstance(response, dict):
                 return response
             # send_resources_read returns a pydantic ReadResourceResult model
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("Read resource timed out")
             self._consecutive_failures += 1
@@ -672,9 +670,8 @@ class StdioTransport(MCPBaseTransport):
             if isinstance(response, dict):
                 return response
             # send_* helpers return a pydantic *Result model; normalize to a dict
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("Get prompt timed out")
             self._consecutive_failures += 1

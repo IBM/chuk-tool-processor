@@ -8,6 +8,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from ._result_normalize import to_plain_dict
+
 
 class MCPBaseTransport(ABC):
     """
@@ -244,6 +246,10 @@ class MCPBaseTransport(ABC):
         This provides shared logic for all transports to ensure consistent
         response format regardless of transport type.
         """
+        # Rust-backed chuk-mcp returns a ToolResult object (with to_dict), not a
+        # dict; normalise it before the dict-oriented handling below.
+        response = to_plain_dict(response)
+
         # Handle explicit error in response
         if "error" in response:
             error_info = response["error"]

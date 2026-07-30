@@ -27,8 +27,8 @@ class TestStdioTransportExceptionHandling:
         # Mock successful initialization
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping") as mock_ping,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", new_callable=AsyncMock) as mock_ping,
         ):
             # Setup mocks
             mock_context = AsyncMock()
@@ -65,7 +65,7 @@ class TestStdioTransportExceptionHandling:
 
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
         ):
             mock_context = AsyncMock()
             mock_streams = (Mock(), Mock())
@@ -96,7 +96,7 @@ class TestStdioTransportExceptionHandling:
 
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
         ):
             mock_context = AsyncMock()
             mock_streams = (Mock(), Mock())
@@ -133,7 +133,7 @@ class TestStdioTransportExceptionHandling:
 
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
         ):
             mock_context = AsyncMock()
             mock_streams = (Mock(), Mock())
@@ -168,7 +168,7 @@ class TestStdioTransportExceptionHandling:
 
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
         ):
             mock_context = AsyncMock()
             mock_streams = (Mock(), Mock())
@@ -204,8 +204,8 @@ class TestStdioTransportExceptionHandling:
 
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping") as mock_ping,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", new_callable=AsyncMock) as mock_ping,
         ):
             mock_context = AsyncMock()
             mock_streams = (Mock(), Mock())
@@ -237,7 +237,7 @@ class TestStdioTransportExceptionHandling:
 
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
         ):
             mock_context = AsyncMock()
             mock_streams = (Mock(), Mock())
@@ -280,8 +280,8 @@ class TestTransportRecovery:
 
         with (
             patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize") as mock_init,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping") as mock_ping,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", new_callable=AsyncMock) as mock_ping,
         ):
             mock_context = AsyncMock()
             mock_streams = (Mock(), Mock())

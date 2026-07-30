@@ -23,6 +23,7 @@ from chuk_mcp.transports.http.transport import (
     StreamableHTTPTransport as ChukHTTPTransport,  # type: ignore[import-untyped]
 )
 
+from ._result_normalize import to_plain_dict
 from .base_transport import MCPBaseTransport
 from .models import TimeoutConfig, TransportMetrics
 
@@ -373,12 +374,9 @@ class HTTPStreamableTransport(MCPBaseTransport):
             # Normalize response - handle multiple formats including Pydantic models
             # 1. Check if it's a Pydantic model with tools attribute (e.g., ListToolsResult from chuk_mcp)
             if hasattr(tools_response, "tools"):
-                tools = tools_response.tools
-                # Convert Pydantic Tool models to dicts if needed
-                if tools and len(tools) > 0 and hasattr(tools[0], "model_dump"):
-                    tools = [t.model_dump() for t in tools]
-                elif tools and len(tools) > 0 and hasattr(tools[0], "dict"):
-                    tools = [t.dict() for t in tools]
+                # Tool entries may be Pydantic models (model_dump/dict) or the
+                # Rust-backed chuk-mcp's PyO3 objects (to_dict); normalise both.
+                tools = [to_plain_dict(t) for t in tools_response.tools]
             # 2. Check if it's a dict with "tools" key
             elif isinstance(tools_response, dict):
                 tools = tools_response.get("tools", [])
@@ -547,10 +545,10 @@ class HTTPStreamableTransport(MCPBaseTransport):
             )
             if isinstance(response, dict):
                 return response
-            # send_* helpers return a pydantic *Result model; normalize to a dict
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            # send_* helpers return a Result model (Pydantic model_dump/dict, or
+            # the Rust-backed chuk-mcp's to_dict); normalise to a dict.
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("List resources timed out")
             self._consecutive_failures += 1
@@ -571,10 +569,10 @@ class HTTPStreamableTransport(MCPBaseTransport):
             )
             if isinstance(response, dict):
                 return response
-            # send_* helpers return a pydantic *Result model; normalize to a dict
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            # send_* helpers return a Result model (Pydantic model_dump/dict, or
+            # the Rust-backed chuk-mcp's to_dict); normalise to a dict.
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("List prompts timed out")
             self._consecutive_failures += 1
@@ -620,10 +618,10 @@ class HTTPStreamableTransport(MCPBaseTransport):
             )
             if isinstance(response, dict):
                 return response
-            # send_* helpers return a pydantic *Result model; normalize to a dict
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            # send_* helpers return a Result model (Pydantic model_dump/dict, or
+            # the Rust-backed chuk-mcp's to_dict); normalise to a dict.
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("Get prompt timed out")
             self._consecutive_failures += 1
