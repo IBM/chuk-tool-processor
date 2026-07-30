@@ -1,19 +1,32 @@
 """
-Test exception handling in transports with chuk-mcp v0.8.0.
+Test exception handling in the STDIO transport's dual-era connect path.
 
-This test suite verifies that transports properly handle exceptions
-from send_initialize() which now raises exceptions instead of returning None.
+The transport connects via ``chuk_mcp_rs.connect_dual_stdio``, which either
+returns a settled dual-era client or raises. This suite verifies that:
 
-Key Points:
-1. send_initialize() raises exceptions (doesn't return None)
-2. Transports handle exceptions gracefully
-3. Process crashes are detected and metrics updated
-4. Connection health monitoring works correctly
+1. A successful connect initialises without any ``None`` checks.
+2. Connect failures (timeout, transient, version, generic) are handled
+   gracefully — ``initialize()`` returns ``False`` rather than raising.
+3. Process-crash metrics are updated on failure.
+4. A fresh transport can recover after a prior connect failure.
 """
 
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+_CONNECT = "chuk_tool_processor.mcp.transport.stdio_transport.connect_dual_stdio"
+
+
+def _mock_dual_client(ping=True):
+    """Build a mock dual-era client matching the surface the transport uses."""
+    client = AsyncMock()
+    client.raw_streams = AsyncMock(return_value=(Mock(), Mock()))
+    client.ping = AsyncMock(return_value=ping)
+    client.close = AsyncMock()
+    client.era = "2025-06-18"
+    client.protocol_version = "2025-06-18"
+    return client
 
 
 class TestStdioTransportExceptionHandling:
@@ -21,67 +34,34 @@ class TestStdioTransportExceptionHandling:
 
     @pytest.mark.asyncio
     async def test_successful_initialization_no_none_check(self):
-        """Test that successful initialization doesn't check for None."""
+        """A successful connect initialises without checking the client for None."""
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        # Mock successful initialization
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", new_callable=AsyncMock) as mock_ping,
-        ):
-            # Setup mocks
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
+        client = _mock_dual_client(ping=True)
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
+            mock_connect.return_value = client
 
-            # send_initialize returns InitializeResult (not None)
-            mock_init_result = Mock()
-            mock_init_result.serverInfo.name = "TestServer"
-            mock_init.return_value = mock_init_result
-
-            mock_ping.return_value = True
-
-            # Create transport
-            server_params = {"command": "test", "args": []}
-            transport = StdioTransport(server_params)
-
-            # Initialize
+            transport = StdioTransport({"command": "test", "args": []})
             success = await transport.initialize()
 
-            # Verify
             assert success is True
             assert transport._initialized is True
-            mock_init.assert_called_once()
-            # Critical: init_result is used directly, NOT checked for None
+            mock_connect.assert_called_once()
+            # Critical: the client is used directly, NOT checked for None.
 
             await transport.close()
 
     @pytest.mark.asyncio
     async def test_timeout_error_raises_and_handled(self):
-        """Test that TimeoutError from send_initialize is handled."""
+        """A TimeoutError from the dual-era connect is handled."""
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-        ):
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
+            mock_connect.side_effect = TimeoutError("Server didn't respond")
 
-            # send_initialize raises TimeoutError
-            mock_init.side_effect = TimeoutError("Server didn't respond")
-
-            server_params = {"command": "test", "args": []}
-            transport = StdioTransport(server_params)
-
-            # Initialize should handle the timeout
+            transport = StdioTransport({"command": "test", "args": []})
             success = await transport.initialize()
 
-            # Verify
             assert success is False
             assert transport._initialized is False
             metrics = transport.get_metrics()
@@ -91,34 +71,15 @@ class TestStdioTransportExceptionHandling:
 
     @pytest.mark.asyncio
     async def test_retryable_error_raises_and_handled(self):
-        """Test that RetryableError from send_initialize is handled."""
+        """A transient error (e.g. HTTP 401) from connect is handled."""
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-        ):
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
+            mock_connect.side_effect = Exception('HTTP 401: {"error":"invalid_token"}')
 
-            # Mock RetryableError (e.g., 401 authentication error)
-            try:
-                from chuk_mcp.protocol.types.errors import RetryableError
-
-                mock_init.side_effect = RetryableError('HTTP 401: {"error":"invalid_token"}', code=-32603)
-            except ImportError:
-                # Fallback if RetryableError not available
-                mock_init.side_effect = Exception('HTTP 401: {"error":"invalid_token"}')
-
-            server_params = {"command": "test", "args": []}
-            transport = StdioTransport(server_params)
-
-            # Initialize should handle the error
+            transport = StdioTransport({"command": "test", "args": []})
             success = await transport.initialize()
 
-            # Verify
             assert success is False
             assert transport._initialized is False
             metrics = transport.get_metrics()
@@ -128,34 +89,15 @@ class TestStdioTransportExceptionHandling:
 
     @pytest.mark.asyncio
     async def test_version_mismatch_error_handled(self):
-        """Test that VersionMismatchError from send_initialize is handled."""
+        """A protocol version-mismatch error from connect is handled."""
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-        ):
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
+            mock_connect.side_effect = Exception("Unsupported protocol version 2025-06-18")
 
-            # Mock VersionMismatchError
-            try:
-                from chuk_mcp.protocol.types.errors import VersionMismatchError
-
-                mock_init.side_effect = VersionMismatchError("2025-06-18", ["2024-11-05"])
-            except ImportError:
-                # Fallback if VersionMismatchError not available
-                mock_init.side_effect = Exception("Version mismatch")
-
-            server_params = {"command": "test", "args": []}
-            transport = StdioTransport(server_params)
-
-            # Initialize should handle the error
+            transport = StdioTransport({"command": "test", "args": []})
             success = await transport.initialize()
 
-            # Verify
             assert success is False
             assert transport._initialized is False
 
@@ -163,28 +105,15 @@ class TestStdioTransportExceptionHandling:
 
     @pytest.mark.asyncio
     async def test_general_exception_handled(self):
-        """Test that general exceptions from send_initialize are handled."""
+        """A generic exception from connect is handled."""
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-        ):
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
+            mock_connect.side_effect = Exception("Unexpected error")
 
-            # send_initialize raises generic exception
-            mock_init.side_effect = Exception("Unexpected error")
-
-            server_params = {"command": "test", "args": []}
-            transport = StdioTransport(server_params)
-
-            # Initialize should handle the error
+            transport = StdioTransport({"command": "test", "args": []})
             success = await transport.initialize()
 
-            # Verify
             assert success is False
             assert transport._initialized is False
             metrics = transport.get_metrics()
@@ -195,79 +124,52 @@ class TestStdioTransportExceptionHandling:
     @pytest.mark.asyncio
     async def test_no_none_return_from_initialize(self):
         """
-        Critical test: Verify send_initialize never returns None.
+        Critical test: a settled connect yields a usable client, never None.
 
-        This is a breaking change test - ensures we never check for None
-        because it's no longer a possible return value.
+        Ensures ``initialize()`` uses the client directly instead of guarding
+        against a ``None`` return that can no longer occur.
         """
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", new_callable=AsyncMock) as mock_ping,
-        ):
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
+        client = _mock_dual_client(ping=True)
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
+            mock_connect.return_value = client
 
-            # send_initialize should NEVER return None
-            # It either returns InitializeResult or raises an exception
-            mock_init_result = Mock()
-            mock_init.return_value = mock_init_result
-            mock_ping.return_value = True
-
-            server_params = {"command": "test", "args": []}
-            transport = StdioTransport(server_params)
-
-            # This should work WITHOUT checking for None
+            transport = StdioTransport({"command": "test", "args": []})
             success = await transport.initialize()
 
             assert success is True
-            # Verify init was called and result was used (not checked for None)
-            mock_init.assert_called_once()
+            mock_connect.assert_called_once()
 
             await transport.close()
 
     @pytest.mark.asyncio
     async def test_metrics_updated_on_error(self):
-        """Test that metrics are updated correctly on errors."""
+        """Process-crash metrics are updated correctly on connect errors."""
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-        ):
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
+        error_types = [
+            TimeoutError("timeout"),
+            Exception("general error"),
+        ]
 
-            # Multiple error types to test metrics
-            error_types = [
-                TimeoutError("timeout"),
-                Exception("general error"),
-            ]
-
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
             for error in error_types:
-                mock_init.side_effect = error
+                mock_connect.side_effect = error
 
-                server_params = {"command": "test", "args": []}
-                transport = StdioTransport(server_params, enable_metrics=True)
-
+                transport = StdioTransport({"command": "test", "args": []}, enable_metrics=True)
                 success = await transport.initialize()
 
                 assert success is False
                 metrics = transport.get_metrics()
-                # Each error should increment process_crashes
+                # Each error should increment process_crashes on its own transport.
                 assert metrics["process_crashes"] == 1
 
                 await transport.close()
 
 
 # Note: HTTP transport exception handling tests are covered in test_http_streamable.py
-# These tests require more complex mocking of the HTTP client structure
+# These tests require more complex mocking of the HTTP client structure.
 
 
 class TestTransportRecovery:
@@ -275,41 +177,24 @@ class TestTransportRecovery:
 
     @pytest.mark.asyncio
     async def test_recovery_after_crash(self):
-        """Test that transport can recover after a crash."""
+        """A fresh transport can connect after a prior connect failure."""
         from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client") as mock_client,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", new_callable=AsyncMock) as mock_ping,
-        ):
-            mock_context = AsyncMock()
-            mock_streams = (Mock(), Mock())
-            mock_context.__aenter__.return_value = mock_streams
-            mock_client.return_value = mock_context
-
-            # First attempt fails, second succeeds
-            mock_init_result = Mock()
-            mock_init.side_effect = [
-                Exception("Transient error"),  # First call fails
-                mock_init_result,  # Second call succeeds
+        client = _mock_dual_client(ping=True)
+        with patch(_CONNECT, new_callable=AsyncMock) as mock_connect:
+            # First connect fails, second succeeds.
+            mock_connect.side_effect = [
+                Exception("Transient error"),
+                client,
             ]
-            mock_ping.return_value = True
 
-            server_params = {"command": "test", "args": []}
-            transport = StdioTransport(server_params, enable_metrics=True)
-
-            # First attempt
+            transport = StdioTransport({"command": "test", "args": []}, enable_metrics=True)
             success1 = await transport.initialize()
             assert success1 is False
-            metrics1 = transport.get_metrics()
-            assert metrics1["process_crashes"] == 1
-
-            # Recovery attempt (close and reinitialize)
+            assert transport.get_metrics()["process_crashes"] == 1
             await transport.close()
 
-            # Create new transport and try again
-            transport2 = StdioTransport(server_params, enable_metrics=True)
+            transport2 = StdioTransport({"command": "test", "args": []}, enable_metrics=True)
             success2 = await transport2.initialize()
 
             assert success2 is True

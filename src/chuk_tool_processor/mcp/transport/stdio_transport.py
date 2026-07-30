@@ -9,9 +9,9 @@ import time
 from typing import Any
 
 import psutil
-from chuk_mcp.protocol.messages import (  # type: ignore[import-untyped]
-    send_initialize,
-    send_ping,
+from chuk_mcp_rs import (  # type: ignore[import-untyped]
+    StdioParameters,
+    connect_dual_stdio,
     send_prompts_get,
     send_prompts_list,
     send_resources_list,
@@ -19,8 +19,6 @@ from chuk_mcp.protocol.messages import (  # type: ignore[import-untyped]
     send_tools_call,
     send_tools_list,
 )
-from chuk_mcp.transports.stdio import stdio_client  # type: ignore[import-untyped]
-from chuk_mcp.transports.stdio.parameters import StdioParameters  # type: ignore[import-untyped]
 
 from ._result_normalize import to_plain_dict
 from .base_transport import MCPBaseTransport
@@ -85,6 +83,7 @@ class StdioTransport(MCPBaseTransport):
         self.process_monitor = process_monitor  # NEW
 
         # Connection state
+        self._client = None  # dual-era chuk_mcp_rs MCPClient
         self._context = None
         self._streams = None
         self._initialized = False
@@ -184,55 +183,40 @@ class StdioTransport(MCPBaseTransport):
         try:
             logger.debug("Initializing STDIO transport...")
 
-            # Create context with timeout protection
-            self._context = stdio_client(self.server_params)
-            self._streams = await asyncio.wait_for(self._context.__aenter__(), timeout=self.connection_timeout)
+            # Dual-era connect (timeout-protected): probes server/discover for a
+            # modern 2026-07-28 peer and falls back to the initialize handshake
+            # for a legacy one. The era is settled internally.
+            self._client = await asyncio.wait_for(
+                connect_dual_stdio(self.server_params), timeout=self.connection_timeout
+            )
+            # Reuse the settled streams with the existing send_* code paths; the
+            # transport injects modern _meta, so send_* is era-agnostic.
+            self._streams = await self._client.raw_streams()
+            logger.debug(
+                "STDIO transport connected (era=%s, protocol=%s)",
+                getattr(self._client, "era", "?"),
+                getattr(self._client, "protocol_version", "?"),
+            )
 
-            # Capture process information for monitoring (NEW)
-            if self.process_monitor and hasattr(self._context, "_process"):
-                self._process_id = getattr(self._context._process, "pid", None)
-                self._process_start_time = time.monotonic()
-                logger.debug("Subprocess PID: %s", self._process_id)
+            # Liveness verification (era-aware; a modern peer maps ping onto a
+            # cheap server/discover).
+            ping_start = time.monotonic()
+            ping_success = await asyncio.wait_for(self._client.ping(), timeout=self.default_timeout)
+            ping_time = time.monotonic() - ping_start
 
-            # Send initialize message with timeout
-            init_result = await asyncio.wait_for(send_initialize(*self._streams), timeout=self.default_timeout)
-
-            if init_result:
-                # Enhanced health verification (like SSE)
-                logger.debug("Verifying connection with ping...")
-                ping_start = time.monotonic()
-                # Use default timeout for initial ping verification
-                ping_success = await asyncio.wait_for(send_ping(*self._streams), timeout=self.default_timeout)
-                ping_time = time.monotonic() - ping_start
-
-                if ping_success:
-                    self._initialized = True
-                    self._last_successful_ping = time.time()
-                    self._consecutive_failures = 0
-
-                    if self.enable_metrics:
-                        init_time = time.monotonic() - start_time
-                        self._metrics["initialization_time"] = init_time
-                        self._metrics["last_ping_time"] = ping_time
-
-                    logger.debug(
-                        "STDIO transport initialized successfully in %.3fs (ping: %.3fs)",
-                        time.monotonic() - start_time,
-                        ping_time,
-                    )
-                    return True
-                else:
-                    logger.debug("STDIO connection established but ping failed")
-                    # Still consider it initialized
-                    self._initialized = True
-                    self._consecutive_failures = 1
-                    if self.enable_metrics:
-                        self._metrics["initialization_time"] = time.monotonic() - start_time
-                    return True
-            else:
-                logger.warning("STDIO initialization failed")
-                await self._cleanup()
-                return False
+            self._initialized = True
+            self._last_successful_ping = time.time()
+            self._consecutive_failures = 0 if ping_success else 1
+            if self.enable_metrics:
+                self._metrics["initialization_time"] = time.monotonic() - start_time
+                self._metrics["last_ping_time"] = ping_time
+            logger.debug(
+                "STDIO transport initialized in %.3fs (era=%s, ping=%.3fs)",
+                time.monotonic() - start_time,
+                getattr(self._client, "era", "?"),
+                ping_time,
+            )
+            return True
 
         except TimeoutError:
             logger.error("STDIO initialization timed out after %ss", self.connection_timeout)
@@ -287,10 +271,10 @@ class StdioTransport(MCPBaseTransport):
                 self._metrics["memory_usage_mb"],
             )
 
-        if self._context:
+        if self._client is not None:
             try:
-                await self._context.__aexit__(None, None, None)
-                logger.debug("STDIO context closed")
+                await self._client.close()
+                logger.debug("STDIO client closed")
             except Exception as e:
                 logger.debug("Error during STDIO close: %s", e)
             finally:
@@ -318,6 +302,7 @@ class StdioTransport(MCPBaseTransport):
                 # FIXED: Handle all possible errors including TypeError from mock objects
                 logger.debug("Could not terminate process %s (may be mock or already dead)", self._process_id)
 
+        self._client = None
         self._context = None
         self._streams = None
         self._initialized = False
@@ -341,7 +326,9 @@ class StdioTransport(MCPBaseTransport):
 
         start_time = time.monotonic()
         try:
-            result = await asyncio.wait_for(send_ping(*self._streams), timeout=self.default_timeout)
+            # Era-aware: the dual client maps ping onto server/discover for a
+            # modern peer and onto the ping RPC for a legacy one.
+            result = await asyncio.wait_for(self._client.ping(), timeout=self.default_timeout)
 
             success = bool(result)
 

@@ -15,11 +15,6 @@ import contextlib
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
-# --------------------------------------------------------------------------- #
-#  CHUK imports                                                               #
-# --------------------------------------------------------------------------- #
-from chuk_mcp.config import load_config  # type: ignore[import-untyped]
-
 from chuk_tool_processor.logging import get_logger
 from chuk_tool_processor.mcp.models import MCPTransport
 from chuk_tool_processor.mcp.transport import (
@@ -30,6 +25,11 @@ from chuk_tool_processor.mcp.transport import (
     TimeoutConfig,
 )
 from chuk_tool_processor.mcp.transport.models import MCPToolDefinition, ServerInfo
+
+# --------------------------------------------------------------------------- #
+#  CHUK imports                                                               #
+# --------------------------------------------------------------------------- #
+from ._config import load_config
 
 if TYPE_CHECKING:
     from chuk_tool_processor.mcp.middleware import MiddlewareConfig, MiddlewareStack

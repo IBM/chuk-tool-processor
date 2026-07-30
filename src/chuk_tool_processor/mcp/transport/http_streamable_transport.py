@@ -6,7 +6,9 @@ import logging
 import time
 from typing import Any
 
-from chuk_mcp.protocol.messages import (  # type: ignore[import-untyped]
+from chuk_mcp_rs import StreamableHTTPParameters  # type: ignore[import-untyped]
+from chuk_mcp_rs import StreamableHTTPTransport as ChukHTTPTransport
+from chuk_mcp_rs import (  # type: ignore[import-untyped]
     send_initialize,
     send_ping,
     send_prompts_get,
@@ -15,12 +17,6 @@ from chuk_mcp.protocol.messages import (  # type: ignore[import-untyped]
     send_resources_read,
     send_tools_call,
     send_tools_list,
-)
-from chuk_mcp.transports.http.parameters import StreamableHTTPParameters  # type: ignore[import-untyped]
-
-# Import chuk-mcp HTTP transport components
-from chuk_mcp.transports.http.transport import (
-    StreamableHTTPTransport as ChukHTTPTransport,  # type: ignore[import-untyped]
 )
 
 from ._result_normalize import to_plain_dict

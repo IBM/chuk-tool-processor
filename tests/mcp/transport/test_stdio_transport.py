@@ -7,9 +7,24 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from chuk_mcp.transports.stdio.parameters import StdioParameters
+from chuk_mcp_rs import StdioParameters
 
 from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
+
+
+def _mock_dual_client(streams=None, ping=True, era="2025-06-18", protocol="2025-06-18"):
+    """Build a mock chuk_mcp_rs dual-era client for patching ``connect_dual_stdio``.
+
+    Mirrors the surface ``StdioTransport`` uses: ``raw_streams()``, ``ping()``,
+    ``close()``, and the ``era``/``protocol_version`` attributes.
+    """
+    client = AsyncMock()
+    client.raw_streams = AsyncMock(return_value=streams if streams is not None else (Mock(), Mock()))
+    client.ping = AsyncMock(return_value=ping)
+    client.close = AsyncMock()
+    client.era = era
+    client.protocol_version = protocol
+    return client
 
 
 class TestStdioTransport:
@@ -47,18 +62,13 @@ class TestStdioTransport:
     @pytest.mark.asyncio
     async def test_initialize_success(self, transport):
         """Test successful STDIO transport initialization with metrics tracking."""
-        mock_context = AsyncMock()
         mock_streams = (Mock(), Mock())  # (read_stream, write_stream)
+        client = _mock_dual_client(streams=mock_streams, ping=True)
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client", return_value=mock_context),
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", AsyncMock(return_value=True)),
-            # initialize() follows up with a liveness ping; mock it too (the
-            # Rust-backed send_ping type-checks its streams and rejects Mocks).
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", AsyncMock(return_value=True)),
+        with patch(
+            "chuk_tool_processor.mcp.transport.stdio_transport.connect_dual_stdio",
+            AsyncMock(return_value=client),
         ):
-            mock_context.__aenter__.return_value = mock_streams
-
             result = await transport.initialize()
 
             assert result is True
@@ -72,29 +82,22 @@ class TestStdioTransport:
     @pytest.mark.asyncio
     async def test_initialize_timeout(self, transport):
         """Test STDIO transport initialization timeout."""
-        mock_context = AsyncMock()
-
-        with patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client", return_value=mock_context):
-            # Simulate timeout during context entry
-            mock_context.__aenter__.side_effect = TimeoutError()
-
+        with patch(
+            "chuk_tool_processor.mcp.transport.stdio_transport.connect_dual_stdio",
+            AsyncMock(side_effect=TimeoutError()),
+        ):
             result = await transport.initialize()
 
             assert result is False
             assert transport._initialized is False
 
     @pytest.mark.asyncio
-    async def test_initialize_send_initialize_fails(self, transport):
-        """Test STDIO transport initialization when send_initialize fails."""
-        mock_context = AsyncMock()
-        mock_streams = (Mock(), Mock())
-
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client", return_value=mock_context),
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", AsyncMock(return_value=False)),
+    async def test_initialize_connect_fails(self, transport):
+        """Test STDIO transport initialization when the dual-era connect fails."""
+        with patch(
+            "chuk_tool_processor.mcp.transport.stdio_transport.connect_dual_stdio",
+            AsyncMock(side_effect=Exception("connect failed")),
         ):
-            mock_context.__aenter__.return_value = mock_streams
-
             result = await transport.initialize()
 
             assert result is False
@@ -105,14 +108,14 @@ class TestStdioTransport:
         """Test STDIO ping when initialized with metrics tracking."""
         transport._initialized = True
         transport._streams = (Mock(), Mock())
+        transport._client = _mock_dual_client(ping=True)
 
-        with patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", AsyncMock(return_value=True)):
-            result = await transport.send_ping()
-            assert result is True
+        result = await transport.send_ping()
+        assert result is True
 
-            # Check ping metrics were updated
-            metrics = transport.get_metrics()
-            assert metrics["last_ping_time"] >= 0  # May be 0 in mocked tests
+        # Check ping metrics were updated
+        metrics = transport.get_metrics()
+        assert metrics["last_ping_time"] >= 0  # May be 0 in mocked tests
 
     @pytest.mark.asyncio
     async def test_send_ping_not_initialized(self, transport):
@@ -126,17 +129,15 @@ class TestStdioTransport:
         """Test STDIO ping with exception and metrics tracking."""
         transport._initialized = True
         transport._streams = (Mock(), Mock())
+        transport._client = _mock_dual_client()
+        transport._client.ping = AsyncMock(side_effect=Exception("Pipe error"))
 
-        with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_ping",
-            AsyncMock(side_effect=Exception("Pipe error")),
-        ):
-            result = await transport.send_ping()
-            assert result is False
+        result = await transport.send_ping()
+        assert result is False
 
-            # Check pipe error metrics
-            metrics = transport.get_metrics()
-            assert metrics["pipe_errors"] == 1
+        # Check pipe error metrics
+        metrics = transport.get_metrics()
+        assert metrics["pipe_errors"] == 1
 
     def test_is_connected(self, transport):
         """Test connection status check (consistent method)."""
@@ -424,15 +425,15 @@ class TestStdioTransport:
         transport._metrics["successful_calls"] = 4
         transport._metrics["failed_calls"] = 1
 
-        mock_context = AsyncMock()
-        transport._context = mock_context
+        client = _mock_dual_client()
+        transport._client = client
 
         await transport.close()
 
         assert transport._initialized is False
-        assert transport._context is None
+        assert transport._client is None
         assert transport._streams is None
-        mock_context.__aexit__.assert_called_once_with(None, None, None)
+        client.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_close_no_context(self, transport):
@@ -501,11 +502,10 @@ class TestStdioTransport:
     @pytest.mark.asyncio
     async def test_initialize_with_exception(self, transport):
         """Test initialization with general exception."""
-        mock_context = AsyncMock()
-
-        with patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client", return_value=mock_context):
-            mock_context.__aenter__.side_effect = Exception("General error")
-
+        with patch(
+            "chuk_tool_processor.mcp.transport.stdio_transport.connect_dual_stdio",
+            AsyncMock(side_effect=Exception("General error")),
+        ):
             result = await transport.initialize()
             assert result is False
             assert transport._initialized is False
@@ -515,16 +515,13 @@ class TestStdioTransport:
     @pytest.mark.asyncio
     async def test_initialize_ping_fails_but_still_succeeds(self, transport):
         """Test initialization when ping fails but init still succeeds."""
-        mock_context = AsyncMock()
         mock_streams = (Mock(), Mock())
+        client = _mock_dual_client(streams=mock_streams, ping=False)
 
-        with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client", return_value=mock_context),
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", AsyncMock(return_value=True)),
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", AsyncMock(return_value=False)),
+        with patch(
+            "chuk_tool_processor.mcp.transport.stdio_transport.connect_dual_stdio",
+            AsyncMock(return_value=client),
         ):
-            mock_context.__aenter__.return_value = mock_streams
-
             result = await transport.initialize()
             assert result is True  # Still succeeds even if ping fails
             assert transport._initialized is True
@@ -587,37 +584,34 @@ class TestStdioTransport:
         transport._initialized = True
         transport._metrics["total_calls"] = 5
         transport._metrics["successful_calls"] = 4
-        transport._context = AsyncMock()
+        transport._client = _mock_dual_client()
 
         await transport.close()
         assert transport._initialized is False
 
     @pytest.mark.asyncio
     async def test_close_with_exception(self, transport):
-        """Test closing when context exit raises exception."""
+        """Test closing when the client close raises an exception."""
         transport._initialized = True
-        mock_context = AsyncMock()
-        transport._context = mock_context
-        mock_context.__aexit__.side_effect = Exception("Exit error")
+        client = _mock_dual_client()
+        client.close = AsyncMock(side_effect=Exception("Exit error"))
+        transport._client = client
 
         await transport.close()
         # Should still cleanup
         assert transport._initialized is False
-        assert transport._context is None
+        assert transport._client is None
 
     @pytest.mark.asyncio
     async def test_send_ping_timeout(self, transport):
         """Test send_ping with timeout."""
         transport._initialized = True
         transport._streams = (Mock(), Mock())
+        transport._client = _mock_dual_client()
+        transport._client.ping = AsyncMock(side_effect=asyncio.TimeoutError)
 
-        with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_ping",
-            AsyncMock(side_effect=asyncio.TimeoutError),
-        ):
-            result = await transport.send_ping()
-            assert result is False
-            assert transport._consecutive_failures == 1
+        result = await transport.send_ping()
+        assert result is False
 
     @pytest.mark.asyncio
     async def test_is_connected_too_many_failures(self, transport):
@@ -793,16 +787,16 @@ class TestStdioTransport:
     @pytest.mark.asyncio
     async def test_attempt_recovery(self, transport):
         """Test attempt_recovery method."""
-        mock_context = AsyncMock()
         mock_streams = (Mock(), Mock())
+        client = _mock_dual_client(streams=mock_streams, ping=True)
 
         with (
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.stdio_client", return_value=mock_context),
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_initialize", AsyncMock(return_value=True)),
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", AsyncMock(return_value=True)),
+            patch(
+                "chuk_tool_processor.mcp.transport.stdio_transport.connect_dual_stdio",
+                AsyncMock(return_value=client),
+            ),
+            patch("chuk_tool_processor.mcp.transport.stdio_transport.asyncio.sleep", AsyncMock()),
         ):
-            mock_context.__aenter__.return_value = mock_streams
-
             await transport._attempt_recovery()
             assert transport._metrics["recovery_attempts"] == 1
             assert transport._metrics["process_restarts"] == 1
@@ -916,12 +910,10 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
         transport._process_id = 12345
         transport.process_monitor = True
+        transport._client = _mock_dual_client(ping=True)
 
         # Mock health check to return False
-        with (
-            patch.object(transport, "_monitor_process_health", AsyncMock(return_value=False)),
-            patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", AsyncMock(return_value=True)),
-        ):
+        with patch.object(transport, "_monitor_process_health", AsyncMock(return_value=False)):
             result = await transport.send_ping()
             assert result is False
             assert transport._consecutive_failures == 1
@@ -1049,11 +1041,11 @@ class TestStdioTransport:
         """Test send_ping when ping returns False."""
         transport._initialized = True
         transport._streams = (Mock(), Mock())
+        transport._client = _mock_dual_client(ping=False)
 
-        with patch("chuk_tool_processor.mcp.transport.stdio_transport.send_ping", AsyncMock(return_value=False)):
-            result = await transport.send_ping()
-            assert result is False
-            assert transport._consecutive_failures == 1
+        result = await transport.send_ping()
+        assert result is False
+        assert transport._consecutive_failures == 1
 
     @pytest.mark.asyncio
     async def test_get_tools_pydantic_model_with_tools_attribute(self, transport):

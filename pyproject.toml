@@ -35,7 +35,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "chuk-mcp>=0.9",
+    "chuk-mcp-rs>=0.1.0",
     "python-dotenv>=1.0.0",
     "psutil>=7.0.0",
     "pydantic>=2.11.3",
@@ -201,7 +201,7 @@ disallow_incomplete_defs = true  # NEW: Require either all or no params typed
 # Ignore import errors for packages without type stubs
 [[tool.mypy.overrides]]
 module = [
-    "chuk_mcp.*",
+    "chuk_mcp_rs.*",
     "httpx_sse.*",
     "opentelemetry.*",
     "prometheus_client.*",
