@@ -22,6 +22,13 @@ All notable changes to this project are documented here. This project follows
   `StreamManager.get_tool_collisions()` to inspect which servers advertise a tool
   name and surface cross-server name collisions.
 
+### Fixed
+
+- `SubprocessStrategy.shutdown()` now shuts the process pool down directly instead
+  of offloading `pool.shutdown(wait=False)` (already non-blocking) to a thread with
+  a 1s timeout. On a busy event loop the executor could miss the timeout and skip
+  the shutdown entirely — an intermittent test failure and a real pool-leak risk.
+
 ## [0.25.0]
 
 ### Security

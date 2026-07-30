@@ -767,30 +767,21 @@ class SubprocessStrategy(ExecutionStrategy):
             except Exception:
                 logger.debug("Active operations completed successfully")
 
-        # Handle process pool shutdown with proper null checks
+        # Handle process pool shutdown with proper null checks.
         if self._process_pool is not None:
             logger.debug("Finalizing process pool")
+            # Store reference and clear immediately to prevent race conditions.
+            pool_to_shutdown = self._process_pool
+            self._process_pool = None
+            # shutdown(wait=False) is non-blocking (it doesn't join worker
+            # processes), so call it directly — the same way the other cleanup
+            # paths in this module do. Offloading it to a thread-pool executor
+            # with a timeout previously raced: on a busy loop the executor could
+            # fail to run before the timeout fired, so the pool was never told to
+            # shut down at all.
             try:
-                # Store reference and null check before async operation
-                pool_to_shutdown = self._process_pool
-                self._process_pool = None  # Clear immediately to prevent race conditions
-
-                # Create shutdown task with the stored reference
-                shutdown_task = asyncio.create_task(
-                    asyncio.get_event_loop().run_in_executor(
-                        None, lambda: pool_to_shutdown.shutdown(wait=False) if pool_to_shutdown else None
-                    )
-                )
-
-                try:
-                    await asyncio.wait_for(shutdown_task, timeout=1.0)
-                    logger.debug("Process pool shutdown completed")
-                except TimeoutError:
-                    logger.debug("Process pool shutdown timed out, forcing cleanup")
-                    if not shutdown_task.done():
-                        shutdown_task.cancel()
-                except Exception as e:
-                    logger.debug(f"Process pool shutdown completed with warning: {e}")
+                pool_to_shutdown.shutdown(wait=False)
+                logger.debug("Process pool shutdown completed")
             except Exception as e:
                 logger.debug(f"Process pool finalization completed: {e}")
         else:
