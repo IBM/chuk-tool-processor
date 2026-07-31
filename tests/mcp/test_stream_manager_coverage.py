@@ -22,7 +22,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_create_with_stdio_factory(self):
         """Test create_with_stdio factory method."""
-        with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -42,7 +42,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_create_with_stdio_timeout(self):
         """Test create_with_stdio with initialization timeout."""
-        with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             async def slow_init():
@@ -67,8 +67,8 @@ class TestStreamManagerAdditionalCoverage:
     async def test_initialize_general_timeout(self):
         """Test general timeout handling in initialize - covers line 305."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = ({"command": "python", "args": []}, None)
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -95,7 +95,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_sse_oauth_callback(self):
         """Test initialize_with_sse with OAuth refresh callback - covers lines 353-354."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -118,7 +118,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_http_streamable_oauth_callback(self):
         """Test initialize_with_http_streamable with OAuth callback - covers lines 511-512."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -143,7 +143,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_sse_timeout_on_ping_or_tools(self):
         """Test timeout during ping/tools retrieval in initialize_with_sse - line 384."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             # Make initialize itself raise TimeoutError in the outer try block
@@ -163,7 +163,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_http_streamable_timeout_on_ping_or_tools(self):
         """Test timeout during ping/tools in initialize_with_http_streamable - line 546."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             # Make initialization raise TimeoutError in outer try block
@@ -213,7 +213,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_stdio_with_env(self):
         """Test initialize_with_stdio with environment variables - lines 424-425."""
-        with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -234,7 +234,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_stdio_init_failure(self):
         """Test initialize_with_stdio when transport init fails - line 435-436."""
-        with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=False)  # Init fails
             mock_stdio.return_value = mock_transport
@@ -248,7 +248,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_stdio_init_timeout(self):
         """Test initialize_with_stdio timeout - lines 437-439."""
-        with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             async def slow_init():
@@ -269,7 +269,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_stdio_general_timeout(self):
         """Test initialize_with_stdio general timeout - line 460."""
-        with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
 
@@ -288,7 +288,7 @@ class TestStreamManagerAdditionalCoverage:
     @pytest.mark.asyncio
     async def test_initialize_with_stdio_general_exception(self):
         """Test initialize_with_stdio general exception - line 461-462."""
-        with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(side_effect=RuntimeError("Init error"))
             mock_stdio.return_value = mock_transport
@@ -589,8 +589,8 @@ class TestStreamManagerAdditionalCoverage:
     async def test_initialize_with_per_server_timeout(self):
         """Test initialize uses per-server timeout when available."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             # Return per-server timeout
             mock_load.return_value = ({"command": "python", "args": []}, 45.0)  # 45s per-server timeout

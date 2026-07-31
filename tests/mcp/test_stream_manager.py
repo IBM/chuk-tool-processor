@@ -48,8 +48,8 @@ class TestStreamManager:
     async def test_add_server_stdio(self, stream_manager):
         """Test initializing a STDIO server."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             # Mock config load
             mock_load.return_value = {"command": "python", "args": ["-m", "tool_server"]}
@@ -77,7 +77,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_add_server_sse(self, stream_manager):
         """Test initializing with SSE server."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock()
             mock_transport.get_tools = AsyncMock(return_value=[{"name": "sse_tool", "description": "SSE tool"}])
@@ -101,7 +101,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_add_server_http_streamable(self, stream_manager):
         """Test initializing with HTTP Streamable server."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock()
             mock_transport.get_tools = AsyncMock(return_value=[{"name": "http_tool", "description": "HTTP tool"}])
@@ -128,8 +128,8 @@ class TestStreamManager:
     async def test_add_server_duplicate_name(self, stream_manager):
         """Test that duplicate server names are handled."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "python", "args": []}
 
@@ -243,8 +243,8 @@ class TestStreamManager:
     async def test_tool_registration_from_multiple_servers(self, stream_manager):
         """Test tools from multiple servers."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "python", "args": []}
 
@@ -279,10 +279,10 @@ class TestStreamManager:
         """Test loading configuration."""
         # StreamManager doesn't have a load_from_config method
         # Instead it initializes with a config file
-        with patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load:
             mock_load.return_value = {"command": "python", "args": ["-m", "server"]}
 
-            with patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio:
+            with patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio:
                 mock_transport = AsyncMock(spec=MCPBaseTransport)
                 mock_transport.initialize = AsyncMock(return_value=True)
                 mock_transport.get_tools = AsyncMock(return_value=[])
@@ -318,8 +318,8 @@ class TestStreamManager:
     async def test_server_initialization_failure(self, stream_manager):
         """Test handling server initialization failure."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "bad_command", "args": []}
 
@@ -342,8 +342,8 @@ class TestStreamManager:
     async def test_create_factory_method(self):
         """Test create factory method."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "python", "args": []}
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -362,8 +362,8 @@ class TestStreamManager:
     async def test_create_with_timeout(self):
         """Test create factory method with initialization timeout - graceful handling."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "python", "args": []}
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -391,7 +391,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_create_with_sse_factory(self):
         """Test create_with_sse factory method."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.get_tools = AsyncMock(return_value=[])
@@ -405,7 +405,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_create_with_sse_timeout(self):
         """Test create_with_sse with timeout - graceful handling."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             async def slow_init():
@@ -427,7 +427,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_create_with_http_streamable_factory(self):
         """Test create_with_http_streamable factory method."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.get_tools = AsyncMock(return_value=[])
@@ -443,7 +443,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_create_with_http_streamable_timeout(self):
         """Test create_with_http_streamable with timeout - graceful handling."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             async def slow_init():
@@ -466,8 +466,8 @@ class TestStreamManager:
     async def test_create_managed_context_manager(self):
         """Test create_managed factory method."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "python", "args": []}
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -520,8 +520,8 @@ class TestStreamManager:
     async def test_initialize_with_sse_type_warning(self, stream_manager):
         """Test that using SSE in initialize() logs warning."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse,
         ):
             mock_load.return_value = ({"url": "http://test.com"}, None)
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -540,8 +540,8 @@ class TestStreamManager:
     async def test_initialize_with_http_streamable_type_warning(self, stream_manager):
         """Test that using http_streamable in initialize() logs warning."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http,
         ):
             mock_load.return_value = ({"url": "http://test.com"}, None)
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -559,8 +559,8 @@ class TestStreamManager:
     async def test_initialize_sse_with_headers(self, stream_manager):
         """Test initialize with SSE and headers."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse,
         ):
             mock_load.return_value = ({"url": "http://test.com", "headers": {"Auth": "Bearer token"}}, None)
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -581,8 +581,8 @@ class TestStreamManager:
     async def test_initialize_http_streamable_with_headers_warning(self, stream_manager):
         """Test initialize with HTTP streamable and headers logs warning."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http,
         ):
             mock_load.return_value = (
                 {
@@ -609,8 +609,8 @@ class TestStreamManager:
     async def test_initialize_sse_default_url(self, stream_manager):
         """Test initialize with SSE and no URL uses default."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse,
         ):
             mock_load.return_value = ("not_a_dict", None)  # Invalid config
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -630,8 +630,8 @@ class TestStreamManager:
     async def test_initialize_http_streamable_default_url(self, stream_manager):
         """Test initialize with HTTP streamable and no URL uses default."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http,
         ):
             mock_load.return_value = ("not_a_dict", None)
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -650,8 +650,8 @@ class TestStreamManager:
     async def test_initialize_transport_init_failure(self, stream_manager):
         """Test when transport.initialize() returns False."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "python", "args": []}
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -667,8 +667,8 @@ class TestStreamManager:
     async def test_initialize_timeout_on_init(self, stream_manager):
         """Test timeout during transport initialization."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
-            patch("chuk_tool_processor.mcp.stream_manager.StdioTransport") as mock_stdio,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.StdioTransport") as mock_stdio,
         ):
             mock_load.return_value = {"command": "python", "args": []}
             mock_transport = AsyncMock(spec=MCPBaseTransport)
@@ -690,7 +690,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_sse_bad_config(self, stream_manager):
         """Test initialize_with_sse with missing name or URL."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport"):
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport"):
             # Missing name
             await stream_manager.initialize_with_sse(servers=[{"url": "http://test.com"}])
             assert len(stream_manager.transports) == 0
@@ -702,7 +702,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_sse_init_failure(self, stream_manager):
         """Test initialize_with_sse when transport init fails."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=False)
             mock_sse.return_value = mock_transport
@@ -714,7 +714,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_sse_timeout(self, stream_manager):
         """Test initialize_with_sse with timeout."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             async def slow():
@@ -733,7 +733,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_sse_exception(self, stream_manager):
         """Test initialize_with_sse handles exceptions."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_sse.side_effect = Exception("Connection failed")
 
             await stream_manager.initialize_with_sse(servers=[{"name": "test", "url": "http://test.com"}])
@@ -743,7 +743,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_sse_headers_support(self, stream_manager):
         """Test initialize_with_sse with headers."""
-        with patch("chuk_tool_processor.mcp.stream_manager.SSETransport") as mock_sse:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.SSETransport") as mock_sse:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.get_tools = AsyncMock(return_value=[])
@@ -763,7 +763,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_http_streamable_bad_config(self, stream_manager):
         """Test initialize_with_http_streamable with missing name or URL."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport"):
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport"):
             await stream_manager.initialize_with_http_streamable(servers=[{"url": "http://test.com"}])
             assert len(stream_manager.transports) == 0
 
@@ -773,7 +773,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_http_streamable_init_failure(self, stream_manager):
         """Test initialize_with_http_streamable when transport init fails."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=False)
             mock_http.return_value = mock_transport
@@ -785,7 +785,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_http_streamable_timeout(self, stream_manager):
         """Test initialize_with_http_streamable with timeout."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
 
             async def slow():
@@ -804,7 +804,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_http_streamable_exception(self, stream_manager):
         """Test initialize_with_http_streamable handles exceptions."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_http.side_effect = Exception("Connection failed")
 
             await stream_manager.initialize_with_http_streamable(servers=[{"name": "test", "url": "http://test.com"}])
@@ -814,7 +814,7 @@ class TestStreamManager:
     @pytest.mark.asyncio
     async def test_initialize_with_http_streamable_headers_support(self, stream_manager):
         """Test initialize_with_http_streamable passes headers correctly."""
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as mock_http:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as mock_http:
             mock_transport = AsyncMock(spec=MCPBaseTransport)
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -1370,7 +1370,7 @@ class TestStreamManager:
     async def test_initialize_invalid_transport_type(self, stream_manager):
         """Test initialize with completely invalid transport type."""
         with (
-            patch("chuk_tool_processor.mcp.stream_manager.load_config") as mock_load,
+            patch("chuk_tool_processor.mcp._stream_manager_init.load_config") as mock_load,
         ):
             mock_load.return_value = {"command": "test"}
 

@@ -63,8 +63,13 @@ class TestHTTPStreamableTransportHeaders:
 
             # Mock the send_initialize and send_ping functions
             with (
-                patch("chuk_tool_processor.mcp.transport.http_streamable_transport.send_initialize", new_callable=AsyncMock) as mock_init,
-                patch("chuk_tool_processor.mcp.transport.http_streamable_transport.send_ping", new_callable=AsyncMock) as mock_ping,
+                patch(
+                    "chuk_tool_processor.mcp.transport.http_streamable_transport.send_initialize",
+                    new_callable=AsyncMock,
+                ) as mock_init,
+                patch(
+                    "chuk_tool_processor.mcp.transport.http_streamable_transport.send_ping", new_callable=AsyncMock
+                ) as mock_ping,
             ):
                 mock_init.return_value = None
                 mock_ping.return_value = True
@@ -101,7 +106,7 @@ class TestStreamManagerHeadersPassthrough:
             }
         ]
 
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as MockTransport:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as MockTransport:
             # Create mock transport instance
             mock_transport = AsyncMock()
             mock_transport.initialize = AsyncMock(return_value=True)
@@ -131,7 +136,7 @@ class TestStreamManagerHeadersPassthrough:
         """Test that servers without headers still work."""
         servers = [{"name": "test-server", "url": "https://example.com/mcp"}]
 
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as MockTransport:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as MockTransport:
             mock_transport = AsyncMock()
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -160,7 +165,7 @@ class TestStreamManagerHeadersPassthrough:
             {"name": "server3", "url": "https://server3.com/mcp"},
         ]
 
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as MockTransport:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as MockTransport:
             mock_transport = AsyncMock()
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -203,7 +208,7 @@ class TestOAuthHeadersIntegration:
             }
         ]
 
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as MockTransport:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as MockTransport:
             mock_transport = AsyncMock()
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
@@ -230,7 +235,7 @@ class TestOAuthHeadersIntegration:
             }
         ]
 
-        with patch("chuk_tool_processor.mcp.stream_manager.HTTPStreamableTransport") as MockTransport:
+        with patch("chuk_tool_processor.mcp._stream_manager_init.HTTPStreamableTransport") as MockTransport:
             mock_transport = AsyncMock()
             mock_transport.initialize = AsyncMock(return_value=True)
             mock_transport.send_ping = AsyncMock(return_value=True)
