@@ -358,7 +358,7 @@ class TestStdioTransport:
         expected_resources = {"resources": [{"name": "resource1"}]}
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_resources_list",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_resources_list",
             AsyncMock(return_value=expected_resources),
         ):
             result = await transport.list_resources()
@@ -380,7 +380,7 @@ class TestStdioTransport:
         expected_prompts = {"prompts": [{"name": "prompt1"}]}
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_prompts_list",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_prompts_list",
             AsyncMock(return_value=expected_prompts),
         ):
             result = await transport.list_prompts()
@@ -395,7 +395,7 @@ class TestStdioTransport:
         expected_resource = {"content": "resource data"}
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_resources_read",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_resources_read",
             AsyncMock(return_value=expected_resource),
         ):
             result = await transport.read_resource("test://resource")
@@ -410,7 +410,7 @@ class TestStdioTransport:
         expected_prompt = {"messages": [{"role": "user", "content": "test"}]}
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_prompts_get",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_prompts_get",
             AsyncMock(return_value=expected_prompt),
         ):
             result = await transport.get_prompt("test_prompt", {"arg": "value"})
@@ -721,7 +721,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_resources_list",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_resources_list",
             AsyncMock(side_effect=Exception("List error")),
         ):
             result = await transport.list_resources()
@@ -740,7 +740,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_prompts_list",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_prompts_list",
             AsyncMock(side_effect=Exception("List error")),
         ):
             result = await transport.list_prompts()
@@ -759,7 +759,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_resources_read",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_resources_read",
             AsyncMock(side_effect=Exception("Read error")),
         ):
             result = await transport.read_resource("test://uri")
@@ -778,7 +778,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_prompts_get",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_prompts_get",
             AsyncMock(side_effect=Exception("Get error")),
         ):
             result = await transport.get_prompt("test_prompt")
@@ -1307,7 +1307,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_resources_list",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_resources_list",
             AsyncMock(side_effect=asyncio.TimeoutError),
         ):
             result = await transport.list_resources()
@@ -1321,7 +1321,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_prompts_list",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_prompts_list",
             AsyncMock(side_effect=asyncio.TimeoutError),
         ):
             result = await transport.list_prompts()
@@ -1335,7 +1335,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_resources_read",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_resources_read",
             AsyncMock(side_effect=asyncio.TimeoutError),
         ):
             result = await transport.read_resource("test://uri")
@@ -1349,7 +1349,7 @@ class TestStdioTransport:
         transport._streams = (Mock(), Mock())
 
         with patch(
-            "chuk_tool_processor.mcp.transport.stdio_transport.send_prompts_get",
+            "chuk_tool_processor.mcp.transport._stream_resource_methods.send_prompts_get",
             AsyncMock(side_effect=asyncio.TimeoutError),
         ):
             result = await transport.get_prompt("test_prompt")

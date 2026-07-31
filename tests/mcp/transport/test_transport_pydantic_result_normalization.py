@@ -30,6 +30,9 @@ from chuk_tool_processor.mcp.transport.stdio_transport import StdioTransport
 
 STDIO_MOD = "chuk_tool_processor.mcp.transport.stdio_transport"
 HTTP_MOD = "chuk_tool_processor.mcp.transport.http_streamable_transport"
+# stdio and HTTP share the resource/prompt methods (and thus the send_* helpers)
+# via StreamResourceMethodsMixin, so patch the send_* where the mixin looks them up.
+RES_MOD = "chuk_tool_processor.mcp.transport._stream_resource_methods"
 
 
 class _ModelDumpResult:
@@ -91,7 +94,7 @@ class TestResultNormalization:
     async def test_list_resources_normalizes_model(self, factory, mod, flavor):
         transport = factory()
         payload = {"resources": [{"uri": "demo://r1", "name": "r1"}]}
-        with patch(f"{mod}.send_resources_list", AsyncMock(return_value=flavor(payload))):
+        with patch(f"{RES_MOD}.send_resources_list", AsyncMock(return_value=flavor(payload))):
             result = await transport.list_resources()
         assert result == payload
         assert result["resources"][0]["uri"] == "demo://r1"
@@ -102,7 +105,7 @@ class TestResultNormalization:
     async def test_list_prompts_normalizes_model(self, factory, mod, flavor):
         transport = factory()
         payload = {"prompts": [{"name": "greet"}]}
-        with patch(f"{mod}.send_prompts_list", AsyncMock(return_value=flavor(payload))):
+        with patch(f"{RES_MOD}.send_prompts_list", AsyncMock(return_value=flavor(payload))):
             result = await transport.list_prompts()
         assert result == payload
         assert result["prompts"][0]["name"] == "greet"
@@ -113,7 +116,7 @@ class TestResultNormalization:
     async def test_get_prompt_normalizes_model(self, factory, mod, flavor):
         transport = factory()
         payload = {"messages": [{"role": "user", "content": {"type": "text", "text": "hi"}}]}
-        with patch(f"{mod}.send_prompts_get", AsyncMock(return_value=flavor(payload))):
+        with patch(f"{RES_MOD}.send_prompts_get", AsyncMock(return_value=flavor(payload))):
             result = await transport.get_prompt("greet", {})
         assert result == payload
         assert result["messages"][0]["role"] == "user"
@@ -124,7 +127,7 @@ class TestResultNormalization:
     async def test_read_resource_normalizes_model(self, factory, mod, flavor):
         transport = factory()
         payload = {"contents": [{"uri": "demo://r1", "text": "hello"}]}
-        with patch(f"{mod}.send_resources_read", AsyncMock(return_value=flavor(payload))):
+        with patch(f"{RES_MOD}.send_resources_read", AsyncMock(return_value=flavor(payload))):
             result = await transport.read_resource("demo://r1")
         assert result == payload
         assert result["contents"][0]["text"] == "hello"
@@ -135,7 +138,7 @@ class TestResultNormalization:
         # Helpers/servers that already yield a dict must keep working unchanged.
         transport = factory()
         payload = {"resources": [{"uri": "demo://r1", "name": "r1"}]}
-        with patch(f"{mod}.send_resources_list", AsyncMock(return_value=payload)):
+        with patch(f"{RES_MOD}.send_resources_list", AsyncMock(return_value=payload)):
             result = await transport.list_resources()
         assert result == payload
 
@@ -144,6 +147,6 @@ class TestResultNormalization:
     async def test_non_model_non_dict_is_safe(self, factory, mod):
         # An unexpected response type must degrade to {} rather than raise.
         transport = factory()
-        with patch(f"{mod}.send_prompts_list", AsyncMock(return_value=None)):
+        with patch(f"{RES_MOD}.send_prompts_list", AsyncMock(return_value=None)):
             result = await transport.list_prompts()
         assert result == {}

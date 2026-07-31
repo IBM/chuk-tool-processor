@@ -8,25 +8,17 @@ from typing import Any
 
 from chuk_mcp_rs import StreamableHTTPParameters  # type: ignore[import-untyped]
 from chuk_mcp_rs import StreamableHTTPTransport as ChukHTTPTransport
-from chuk_mcp_rs import (  # type: ignore[import-untyped]
-    send_initialize,
-    send_ping,
-    send_prompts_get,
-    send_prompts_list,
-    send_resources_list,
-    send_resources_read,
-    send_tools_call,
-    send_tools_list,
-)
+from chuk_mcp_rs import send_initialize, send_ping, send_tools_call, send_tools_list  # type: ignore[import-untyped]
 
 from ._result_normalize import to_plain_dict
+from ._stream_resource_methods import StreamResourceMethodsMixin
 from .base_transport import MCPBaseTransport
 from .models import TimeoutConfig, TransportMetrics
 
 logger = logging.getLogger(__name__)
 
 
-class HTTPStreamableTransport(MCPBaseTransport):
+class HTTPStreamableTransport(StreamResourceMethodsMixin, MCPBaseTransport):
     """
     HTTP Streamable transport using chuk-mcp HTTP client.
 
@@ -530,102 +522,10 @@ class HTTPStreamableTransport(MCPBaseTransport):
 
     # _is_oauth_error is inherited from MCPBaseTransport
 
-    async def list_resources(self) -> dict[str, Any]:
-        """Enhanced resource listing with error handling."""
-        if not self._initialized:
-            return {}
-
-        try:
-            response = await asyncio.wait_for(
-                send_resources_list(self._read_stream, self._write_stream), timeout=self.default_timeout
-            )
-            if isinstance(response, dict):
-                return response
-            # send_* helpers return a Result model (Pydantic model_dump/dict, or
-            # the Rust-backed chuk-mcp's to_dict); normalise to a dict.
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("List resources timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error listing resources: %s", e)
-            self._consecutive_failures += 1
-            return {}
-
-    async def list_prompts(self) -> dict[str, Any]:
-        """Enhanced prompt listing with error handling."""
-        if not self._initialized:
-            return {}
-
-        try:
-            response = await asyncio.wait_for(
-                send_prompts_list(self._read_stream, self._write_stream), timeout=self.default_timeout
-            )
-            if isinstance(response, dict):
-                return response
-            # send_* helpers return a Result model (Pydantic model_dump/dict, or
-            # the Rust-backed chuk-mcp's to_dict); normalise to a dict.
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("List prompts timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error listing prompts: %s", e)
-            self._consecutive_failures += 1
-            return {}
-
-    async def read_resource(self, uri: str) -> dict[str, Any]:
-        """Read a specific resource."""
-        if not self._initialized:
-            return {}
-
-        try:
-            response = await asyncio.wait_for(
-                send_resources_read(self._read_stream, self._write_stream, uri), timeout=self.default_timeout
-            )
-            if isinstance(response, dict):
-                return response
-            # send_resources_read returns a Result model (Pydantic model_dump/dict,
-            # or the Rust-backed to_dict); normalize either form to a dict.
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("Read resource timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error reading resource: %s", e)
-            self._consecutive_failures += 1
-            return {}
-
-    async def get_prompt(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Get a specific prompt."""
-        if not self._initialized:
-            return {}
-
-        try:
-            response = await asyncio.wait_for(
-                send_prompts_get(self._read_stream, self._write_stream, name, arguments or {}),
-                timeout=self.default_timeout,
-            )
-            if isinstance(response, dict):
-                return response
-            # send_* helpers return a Result model (Pydantic model_dump/dict, or
-            # the Rust-backed chuk-mcp's to_dict); normalise to a dict.
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("Get prompt timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error getting prompt: %s", e)
-            self._consecutive_failures += 1
-            return {}
+    @property
+    def _send_streams(self) -> tuple[Any, Any]:
+        """The (read, write) pair the shared resource/prompt methods send over."""
+        return (self._read_stream, self._write_stream)
 
     def get_metrics(self) -> dict[str, Any]:
         """Enhanced metrics with health information."""

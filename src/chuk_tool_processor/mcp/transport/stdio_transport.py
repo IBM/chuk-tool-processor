@@ -12,21 +12,18 @@ import psutil
 from chuk_mcp_rs import (  # type: ignore[import-untyped]
     StdioParameters,
     connect_dual_stdio,
-    send_prompts_get,
-    send_prompts_list,
-    send_resources_list,
-    send_resources_read,
     send_tools_call,
     send_tools_list,
 )
 
 from ._result_normalize import to_plain_dict
+from ._stream_resource_methods import StreamResourceMethodsMixin
 from .base_transport import MCPBaseTransport
 
 logger = logging.getLogger(__name__)
 
 
-class StdioTransport(MCPBaseTransport):
+class StdioTransport(StreamResourceMethodsMixin, MCPBaseTransport):
     """
     STDIO transport for MCP communication using process pipes.
 
@@ -582,91 +579,10 @@ class StdioTransport(MCPBaseTransport):
 
         return content_list
 
-    async def list_resources(self) -> dict[str, Any]:
-        """Enhanced resource listing with error handling."""
-        if not self._initialized:
-            return {}
-        try:
-            response = await asyncio.wait_for(send_resources_list(*self._streams), timeout=self.default_timeout)
-            self._consecutive_failures = 0  # Reset on success
-            if isinstance(response, dict):
-                return response
-            # send_* helpers return a pydantic *Result model; normalize to a dict
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("List resources timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error listing resources: %s", e)
-            self._consecutive_failures += 1
-            return {}
-
-    async def list_prompts(self) -> dict[str, Any]:
-        """Enhanced prompt listing with error handling."""
-        if not self._initialized:
-            return {}
-        try:
-            response = await asyncio.wait_for(send_prompts_list(*self._streams), timeout=self.default_timeout)
-            self._consecutive_failures = 0  # Reset on success
-            if isinstance(response, dict):
-                return response
-            # send_* helpers return a pydantic *Result model; normalize to a dict
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("List prompts timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error listing prompts: %s", e)
-            self._consecutive_failures += 1
-            return {}
-
-    async def read_resource(self, uri: str) -> dict[str, Any]:
-        """Read a specific resource."""
-        if not self._initialized:
-            return {}
-        try:
-            response = await asyncio.wait_for(send_resources_read(*self._streams, uri), timeout=self.default_timeout)
-            self._consecutive_failures = 0  # Reset on success
-            if isinstance(response, dict):
-                return response
-            # send_resources_read returns a pydantic ReadResourceResult model
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("Read resource timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error reading resource: %s", e)
-            self._consecutive_failures += 1
-            return {}
-
-    async def get_prompt(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Get a specific prompt."""
-        if not self._initialized:
-            return {}
-        try:
-            response = await asyncio.wait_for(
-                send_prompts_get(*self._streams, name, arguments or {}), timeout=self.default_timeout
-            )
-            self._consecutive_failures = 0  # Reset on success
-            if isinstance(response, dict):
-                return response
-            # send_* helpers return a pydantic *Result model; normalize to a dict
-            normalized = to_plain_dict(response)
-            return normalized if isinstance(normalized, dict) else {}
-        except TimeoutError:
-            logger.error("Get prompt timed out")
-            self._consecutive_failures += 1
-            return {}
-        except Exception as e:
-            logger.debug("Error getting prompt: %s", e)
-            self._consecutive_failures += 1
-            return {}
+    @property
+    def _send_streams(self) -> tuple[Any, Any]:
+        """The (read, write) pair the shared resource/prompt methods send over."""
+        return self._streams
 
     def get_metrics(self) -> dict[str, Any]:
         """Enhanced metrics with process and health information."""
