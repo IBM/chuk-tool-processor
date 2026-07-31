@@ -589,10 +589,10 @@ class HTTPStreamableTransport(MCPBaseTransport):
             )
             if isinstance(response, dict):
                 return response
-            # send_resources_read returns a pydantic ReadResourceResult model
-            if hasattr(response, "model_dump"):
-                return response.model_dump()
-            return {}
+            # send_resources_read returns a Result model (Pydantic model_dump/dict,
+            # or the Rust-backed to_dict); normalize either form to a dict.
+            normalized = to_plain_dict(response)
+            return normalized if isinstance(normalized, dict) else {}
         except TimeoutError:
             logger.error("Read resource timed out")
             self._consecutive_failures += 1
