@@ -324,9 +324,10 @@ processor, manager = await setup_mcp_sse(
  └──────────────┴────────────────────┘
 ```
 
-**Relationship with [chuk-mcp](https://pypi.org/project/chuk-mcp/):**
-- `chuk-mcp` is a low-level MCP protocol client (handles transports, protocol negotiation)
-- `chuk-tool-processor` wraps `chuk-mcp` to integrate external tools into your execution pipeline
+**Relationship with [chuk-mcp-rs](https://github.com/IBM/chuk-mcp-rs):**
+- `chuk-mcp-rs` is the low-level MCP protocol client — a Rust core (transports, protocol negotiation) exposed to Python as the `chuk_mcp_rs` extension
+- `chuk-tool-processor` builds directly on `chuk-mcp-rs` to integrate external tools into your execution pipeline
+- STDIO servers are connected with era-aware negotiation, so both legacy (`initialize` handshake) and modern (`2026-07-28` `server/discover`) MCP servers work transparently
 - You can use local tools, remote MCP tools, or both in the same processor
 
 For detailed MCP examples, see [MCP_INTEGRATION.md](MCP_INTEGRATION.md).

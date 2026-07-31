@@ -3,6 +3,36 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **MCP core is now [chuk-mcp-rs](https://github.com/IBM/chuk-mcp-rs) directly.**
+  `chuk-tool-processor` depends on `chuk-mcp-rs` (the Rust-powered `chuk_mcp_rs`
+  extension) instead of the `chuk-mcp` Python facade. The public API and tool-result
+  behaviour are unchanged; result objects returned by the Rust core (`.to_dict()`)
+  are normalised to plain dicts transparently. Requires `chuk-mcp-rs` to be
+  installable (it must be published to PyPI before a release cut).
+
+### Added
+
+- **Dual-era STDIO connect.** STDIO servers are connected with era-aware
+  negotiation, so `chuk-tool-processor` works transparently with both legacy
+  (`initialize` handshake) and modern (`2026-07-28` `server/discover`) MCP servers.
+
+### Fixed
+
+- HTTP-streamable `read_resource` now normalises Rust-backed result objects
+  (`.to_dict()`) instead of only Pydantic `.model_dump()`, so it no longer returns
+  an empty dict against a modern server.
+
+### Internal
+
+- `StreamManager` (previously a 1185-line module) split into focused mixins
+  (init / resources / lifecycle); the duplicate resource/prompt methods shared by
+  the STDIO and HTTP-streamable transports extracted into a common mixin. No
+  behaviour change; per-file MCP coverage is ≥96% (module total 99%).
+
 ## [0.26.0]
 
 ### Security

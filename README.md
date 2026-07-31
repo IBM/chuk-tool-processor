@@ -722,5 +722,5 @@ Apache 2.0 License - see [LICENSE](LICENSE) for details.
 
 ## Related Projects
 
-- [chuk-mcp](https://pypi.org/project/chuk-mcp/) - Low-level MCP protocol client
+- [chuk-mcp-rs](https://github.com/IBM/chuk-mcp-rs) - Rust-powered low-level MCP protocol client (the `chuk_mcp_rs` extension)
 - [Model Context Protocol](https://modelcontextprotocol.io) - MCP specification
