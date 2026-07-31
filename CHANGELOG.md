@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.26.1]
+
+### Changed
+
+- **Cap `chuk-mcp` below 0.10.** The 0.10 line is the Rust-backed `chuk-mcp` that
+  depends on `chuk-mcp-rs`, which is not yet published to PyPI. Without this cap a
+  `chuk-mcp` 0.10 release would be auto-resolved by `chuk-mcp>=0.9` and break
+  installs (and, transitively, consumers such as `mcp-cli`). The upper bound still
+  allows 0.9.x patch/security releases; it will be lifted once `chuk-mcp-rs` (and
+  `chuk-mcp` 0.10) are published and validated.
+
 ## [0.26.0]
 
 ### Security
