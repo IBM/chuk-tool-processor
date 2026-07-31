@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chuk-tool-processor"
-version = "0.26.0"
+version = "0.26.1"
 description = "Async-native framework for registering, discovering, and executing tools referenced in LLM responses"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -35,7 +35,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "chuk-mcp>=0.9",
+    # Cap below 0.10: the 0.10 line is the Rust-backed chuk-mcp that depends on
+    # chuk-mcp-rs, which is not published yet. Lift once chuk-mcp-rs is on PyPI.
+    "chuk-mcp>=0.9,<0.10",
     "python-dotenv>=1.0.0",
     "psutil>=7.0.0",
     "pydantic>=2.11.3",
